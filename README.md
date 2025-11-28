@@ -1,6 +1,6 @@
 # triptic
 
-A new python project.
+A new project
 
 ## Installation
 
