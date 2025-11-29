@@ -4,10 +4,12 @@
 
 **Project Name**: Triptic (internally named "EO Player")
 **Purpose**: Time-based image display application for triptych installations
-**Technology**: Vanilla JavaScript (bypasses included React scaffold)
+**Technology**:
+- Frontend: Vanilla JavaScript (bypasses included React scaffold)
+- Backend: Python (for LLM API calls and dynamic content generation)
 **Target Hardware**: Portrait displays (1080×1920 pixels)
 
-The application displays different images based on the current minute, cycling through 6 images per hour (one image every 10 minutes). It's designed to run on multiple synchronized screens that can display different image sets.
+The application displays different images based on the current minute, cycling through 6 images per hour (one image every 10 minutes). It's designed to run on multiple synchronized screens that can display different image sets. The Python backend enables dynamic content generation using LLM APIs for future enhancements.
 
 ---
 
@@ -21,11 +23,21 @@ The application displays different images based on the current minute, cycling t
                    │
                    ▼
 ┌─────────────────────────────────────────────────────┐
-│              Static File Server                     │
-│              (serve on Railway)                     │
-└──────────────────┬──────────────────────────────────┘
-                   │
-                   ▼
+│              Railway Deployment                     │
+│    Node.js (serve) + Python Backend                │
+└────────┬────────────────────────────────────┬───────┘
+         │                                    │
+         ▼                                    ▼
+┌────────────────────────┐    ┌────────────────────────────┐
+│  Static File Server    │    │  Python Backend            │
+│  (serve package)       │    │  src/triptic/              │
+│                        │    │                            │
+│  Serves:               │    │  - LLM API integration     │
+│  - public/index.html   │    │  - Dynamic content gen     │
+│  - public/img/*        │    │  - Future API endpoints    │
+└──────────┬─────────────┘    └────────────────────────────┘
+           │
+           ▼
 ┌─────────────────────────────────────────────────────┐
 │           public/index.html                         │
 │       (Vanilla JavaScript Application)              │
@@ -36,6 +48,7 @@ The application displays different images based on the current minute, cycling t
 │  │  3. Calculate current minute % 6             │ │
 │  │  4. Display appropriate image                │ │
 │  │  5. Refresh every 100ms                      │ │
+│  │  6. (Future) Fetch dynamic content via API   │ │
 │  └──────────────────────────────────────────────┘ │
 └──────────────────┬──────────────────────────────────┘
                    │
@@ -44,6 +57,7 @@ The application displays different images based on the current minute, cycling t
 │              Static Image Assets                    │
 │           public/img/[screenId]/                    │
 │           1.png, 2.png ... 6.png                    │
+│        (Future: dynamically generated)              │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -130,6 +144,34 @@ The project was bootstrapped with Create React App but the React rendering is co
 
 **Note**: The React scaffold remains for potential future use but is completely bypassed in the current implementation.
 
+### 4. Python Backend
+
+**Location**: `/src/triptic/` directory
+
+**Status**: Active - Hybrid Architecture
+
+The project includes a Python backend for future dynamic content generation and LLM API integration. This enables the application to evolve beyond static images.
+
+**Current Files**:
+- `src/triptic/__init__.py` - Package initialization
+- `src/triptic/main.py` - Entry point for Python services
+
+**Configuration**:
+- `pyproject.toml` - Python project configuration using `uv` for package management
+- `requirements.txt` - (Future) Dependencies for LLM APIs (OpenAI, Anthropic, etc.)
+
+**Planned Features**:
+- LLM API integration for dynamic content generation
+- Image generation pipeline for creating triptych content
+- API endpoints for content management
+- Scheduled content updates
+
+**Deployment Strategy**:
+The hybrid architecture will be deployed on Railway with:
+- Node.js process serving static files (via `serve` package)
+- Python process running backend services
+- Shared file system for generated images
+
 ---
 
 ## Data Flow
@@ -183,7 +225,13 @@ The project was bootstrapped with Create React App but the React rendering is co
 
 ## API Endpoints
 
-**None** - This is a static application with no backend API. All functionality is client-side JavaScript with static image assets.
+**Current**: None - The frontend is currently a static application with no backend API. All functionality is client-side JavaScript with static image assets.
+
+**Future Python API Endpoints** (Planned):
+- `POST /api/generate` - Generate new triptych images using LLM APIs
+- `GET /api/content` - Retrieve current content metadata
+- `POST /api/schedule` - Schedule content updates
+- `GET /api/health` - Health check for Python backend
 
 ---
 
@@ -351,10 +399,18 @@ body {
 ## Quick Reference
 
 ### Start Development
+
+**Frontend (Node.js)**:
 ```bash
 npm install
 npm run dev          # Development mode with hot reload
 npm start            # Production-like static server
+```
+
+**Backend (Python)**:
+```bash
+uv pip install -e ".[dev]"   # Install with dev dependencies
+python -m triptic.main       # Run Python backend
 ```
 
 ### Deploy to Railway
@@ -382,32 +438,34 @@ railway up
 ```
 /
 ├── .git/                      # Git repository
-├── .claude/                   # Claude Code settings
+├── .github/                   # GitHub settings
+├── .aegis/                    # Aegis configuration
 ├── docs/
-│   └── ARCHITECTURE.md        # This file
+│   └── (documentation files)
 ├── public/                    # Static assets (served by app)
 │   ├── index.html            # Main application (ACTIVE)
-│   ├── react_index.html      # Original React entry (unused)
 │   ├── img/                  # Image assets
-│   │   ├── 1-6.png          # Default screen images
-│   │   ├── center/          # Center screen images
-│   │   ├── left/            # Left screen images
-│   │   └── right/           # Right screen images
+│   │   ├── 1.png-6.png      # Default screen images
+│   │   ├── center/          # Center screen images (1-6.png)
+│   │   ├── left/            # Left screen images (1-6.png)
+│   │   └── right/           # Right screen images (1-6.png)
 │   ├── favicon.ico
+│   ├── logo192.png
+│   ├── logo512.png
 │   ├── manifest.json
 │   └── robots.txt
-├── src/                       # React source (UNUSED)
-│   ├── index.js              # React entry (commented out)
-│   ├── App.js
-│   ├── App.test.js
-│   └── setupTests.js
-├── package.json               # Dependencies and scripts
+├── src/                       # Python backend (ACTIVE)
+│   └── triptic/
+│       ├── __init__.py       # Package initialization
+│       └── main.py           # Python entry point
+├── tests/                     # Python tests
+├── package.json               # Node.js dependencies and scripts
+├── pyproject.toml            # Python project configuration
 ├── railway.json               # Railway deployment config
-├── nixpacks.toml             # Railway build config
-├── Procfile                  # Process definition
-├── CLAUDE.md                 # Claude Code instructions
-├── RAILWAY_DEPLOY.md         # Deployment documentation
-└── README.md                 # Generic CRA documentation
+├── nixpacks.toml             # Railway build config (Node.js)
+├── Procfile                  # Process definition for Railway
+├── design.md                 # This architecture documentation
+└── README.md                 # Project documentation
 ```
 
 ---
@@ -430,10 +488,18 @@ railway up
 - **Process Management**: Automatic restarts on failure
 - **Environment Variables**: Easy configuration management
 - **Logs**: Built-in logging and monitoring
+- **Hybrid Support**: Can run both Node.js and Python processes
+
+### Why Hybrid Architecture (Node.js + Python)?
+- **Specialized Tools**: Node.js excels at serving static files, Python excels at LLM APIs
+- **Future Flexibility**: Python backend enables dynamic content generation without rebuilding frontend
+- **Separation of Concerns**: Frontend display logic separate from backend content generation
+- **Development Experience**: Each team can work in their preferred language
+- **Package Management**: Using `uv` for Python ensures fast, reliable dependency management
 
 ---
 
 ## Conclusion
 
-Triptic is a minimalist, purpose-built application for synchronized triptych displays. Its architecture prioritizes simplicity and reliability over complexity, using vanilla JavaScript to achieve a focused feature set. The main areas for improvement are cleanup of unused code, error handling, and more efficient resource polling.
+Triptic is a hybrid application for synchronized triptych displays, combining a minimalist vanilla JavaScript frontend with a Python backend for future dynamic content generation. The architecture prioritizes simplicity for the display layer while maintaining flexibility for content generation through LLM APIs. Current focus is on reliable image display, with the Python backend prepared for future enhancements in dynamic content creation.
 
