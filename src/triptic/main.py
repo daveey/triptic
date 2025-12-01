@@ -1,10 +1,14 @@
 """Main entry point."""
 
+import sys
 
-def main() -> None:
-    """Main function."""
-    print("Hello from triptic!")
+
+def main() -> int:
+    """Main function - delegates to CLI."""
+    from triptic.cli import main as cli_main
+
+    return cli_main()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

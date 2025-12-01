@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triptic - Test Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
+        }
+
+        .header {
+            background: #16213e;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .controls {
+            background: #16213e;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .controls label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .controls select, .controls input {
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .controls button {
+            background: #e94560;
+            border: none;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .controls button:hover {
+            background: #ff6b6b;
+        }
+
+        .wall-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            min-height: calc(100vh - 180px);
+        }
+
+        .wall {
+            display: flex;
+            gap: 10px;
+            background: #0d0d0d;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .screen {
+            position: relative;
+            background: #000;
+            border: 3px solid #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .screen-label {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .screen iframe {
+            border: none;
+            display: block;
+        }
+
+        .info {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .time-display {
+            font-family: monospace;
+            font-size: 18px;
+            color: #e94560;
+            background: #1a1a2e;
+            padding: 8px 16px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Triptic Wall Simulator</h1>
+        <p>Three synchronized screens displaying time-based images</p>
+    </div>
+
+    <div class="controls">
+        <label>
+            Scale:
+            <select id="scale">
+                <option value="0.15">15%</option>
+                <option value="0.2">20%</option>
+                <option value="0.25" selected>25%</option>
+                <option value="0.3">30%</option>
+                <option value="0.4">40%</option>
+                <option value="0.5">50%</option>
+            </select>
+        </label>
+        <label>
+            Gap:
+            <select id="gap">
+                <option value="0">None</option>
+                <option value="5">5px</option>
+                <option value="10" selected>10px</option>
+                <option value="20">20px</option>
+                <option value="40">40px</option>
+            </select>
+        </label>
+        <button onclick="reloadScreens()">Reload Screens</button>
+        <div class="time-display" id="time">--:--:--</div>
+    </div>
+
+    <div class="wall-container">
+        <div class="wall" id="wall">
+            <div class="screen" id="screen-left">
+                <span class="screen-label">Left</span>
+                <iframe id="iframe-left"></iframe>
+            </div>
+            <div class="screen" id="screen-center">
+                <span class="screen-label">Center</span>
+                <iframe id="iframe-center"></iframe>
+            </div>
+            <div class="screen" id="screen-right">
+                <span class="screen-label">Right</span>
+                <iframe id="iframe-right"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <div class="info">
+        <p>Each screen displays images from its respective folder (left, center, right).</p>
+        <p>Images rotate every 10 minutes based on the current time.</p>
+    </div>
+
+    <script>
+        // Original screen dimensions (portrait)
+        const SCREEN_WIDTH = 1080;
+        const SCREEN_HEIGHT = 1920;
+
+        // Get base URL for iframes
+        const baseUrl = window.location.href.replace(/\/test\.html.*$/, '/index.html');
+
+        function getScale() {
+            return parseFloat(document.getElementById('scale').value);
+        }
+
+        function getGap() {
+            return parseInt(document.getElementById('gap').value);
+        }
+
+        function updateScreenSizes() {
+            const scale = getScale();
+            const gap = getGap();
+            const width = Math.round(SCREEN_WIDTH * scale);
+            const height = Math.round(SCREEN_HEIGHT * scale);
+
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.style.width = width + 'px';
+                screen.style.height = height + 'px';
+            });
+
+            document.querySelectorAll('.screen iframe').forEach(iframe => {
+                iframe.style.width = SCREEN_WIDTH + 'px';
+                iframe.style.height = SCREEN_HEIGHT + 'px';
+                iframe.style.transform = `scale(${scale})`;
+                iframe.style.transformOrigin = 'top left';
+            });
+
+            document.getElementById('wall').style.gap = gap + 'px';
+        }
+
+        function loadScreens() {
+            document.getElementById('iframe-left').src = baseUrl + '#left';
+            document.getElementById('iframe-center').src = baseUrl + '#center';
+            document.getElementById('iframe-right').src = baseUrl + '#right';
+        }
+
+        function reloadScreens() {
+            const iframes = document.querySelectorAll('.screen iframe');
+            iframes.forEach(iframe => {
+                iframe.src = iframe.src;
+            });
+        }
+
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('time').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        // Event listeners
+        document.getElementById('scale').addEventListener('change', updateScreenSizes);
+        document.getElementById('gap').addEventListener('change', updateScreenSizes);
+
+        // Initialize
+        updateScreenSizes();
+        loadScreens();
+        updateTime();
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>
