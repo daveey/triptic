@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1080, height=1920">
+    <title>Triptic</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #000;
+        }
+        #display {
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #666;
+            font-family: sans-serif;
+            font-size: 24px;
+        }
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #f44;
+            font-family: sans-serif;
+            font-size: 18px;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="display"></div>
+    <div id="loading">Loading...</div>
+    <div id="error"></div>
+
+    <script>
+        (function() {
+            // Configuration
+            const IMAGE_COUNT = 6;
+            const POLL_INTERVAL = 100; // ms for loading check
+
+            // State
+            let screenId = document.URL.split("#")[1] || "";
+            let imageUrls = [];
+            let images = [];
+            let numImagesLoaded = 0;
+            let loadingComplete = false;
+            let currentImageIndex = -1;
+            let updateInterval = null;
+
+            // DOM elements
+            const displayEl = document.getElementById('display');
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+
+            function buildImageUrls() {
+                const basePath = screenId ? `img/${screenId}/` : 'img/';
+                imageUrls = [];
+                // Get extension from URL param or default to svg
+                const urlParams = new URLSearchParams(window.location.search);
+                const ext = urlParams.get('ext') || 'svg';
+                for (let i = 1; i <= IMAGE_COUNT; i++) {
+                    imageUrls.push(basePath + i + '.' + ext);
+                }
+            }
+
+            function loadImages() {
+                buildImageUrls();
+                numImagesLoaded = 0;
+
+                imageUrls.forEach(function(url, index) {
+                    const img = new Image();
+                    img.onload = function() {
+                        numImagesLoaded++;
+                        updateLoadingProgress();
+                    };
+                    img.onerror = function() {
+                        // Still count it to avoid infinite waiting
+                        numImagesLoaded++;
+                        console.warn('Failed to load image:', url);
+                        updateLoadingProgress();
+                    };
+                    img.src = url;
+                    images[index] = img;
+                });
+            }
+
+            function updateLoadingProgress() {
+                loadingEl.textContent = 'Loading... ' + numImagesLoaded + '/' + IMAGE_COUNT;
+                if (numImagesLoaded >= IMAGE_COUNT) {
+                    loadingComplete = true;
+                    loadingEl.style.display = 'none';
+                    displayImage();
+                    startUpdateTimer();
+                }
+            }
+
+            function getCurrentImageIndex() {
+                const now = new Date();
+                return now.getMinutes() % IMAGE_COUNT;
+            }
+
+            function displayImage() {
+                const index = getCurrentImageIndex();
+                if (index !== currentImageIndex) {
+                    currentImageIndex = index;
+                    setBackground(imageUrls[index]);
+                }
+            }
+
+            function setBackground(imgUrl) {
+                displayEl.style.backgroundImage = 'url(' + imgUrl + ')';
+            }
+
+            function startUpdateTimer() {
+                // Calculate time until next minute
+                const now = new Date();
+                const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+
+                // Set timeout for next minute, then interval every minute
+                setTimeout(function() {
+                    displayImage();
+                    updateInterval = setInterval(displayImage, 60000);
+                }, msUntilNextMinute);
+            }
+
+            function onLoad() {
+                loadImages();
+
+                // Fallback polling in case images never load (timeout after 30s)
+                setTimeout(function() {
+                    if (!loadingComplete) {
+                        loadingEl.style.display = 'none';
+                        errorEl.textContent = 'Some images failed to load. Screen: ' + (screenId || 'default');
+                        errorEl.style.display = 'block';
+                        // Still try to display what we have
+                        loadingComplete = true;
+                        displayImage();
+                        startUpdateTimer();
+                    }
+                }, 30000);
+            }
+
+            // Start the application
+            window.onload = onLoad;
+        })();
+    </script>
+</body>
+</html>
