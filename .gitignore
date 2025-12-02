@@ -67,3 +67,6 @@ Thumbs.db
 # Build outputs
 /build
 /dist
+
+# Image assets (generated/user content)
+public/img/
