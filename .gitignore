@@ -68,6 +68,6 @@ Thumbs.db
 /build
 /dist
 
-# Image assets (generated/user content)
-public/img/
+# Image assets (generated/user content) - now symlinked from ~/.triptic/content/
+public/img
 generated_imgs/

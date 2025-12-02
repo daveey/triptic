@@ -525,6 +525,13 @@ def list_imagesets(prefix: str = None) -> list:
     return sorted(imagesets.items())
 
 
+def get_content_dir() -> Path:
+    """Get the path to the content directory."""
+    content_dir = Path.home() / ".triptic" / "content"
+    content_dir.mkdir(parents=True, exist_ok=True)
+    return content_dir
+
+
 def get_public_dir() -> Path:
     """Get the path to the public directory."""
     # Try relative to this file first
@@ -549,10 +556,36 @@ def get_public_dir() -> Path:
     raise FileNotFoundError("Could not find public directory")
 
 
+def ensure_content_symlink() -> None:
+    """Ensure public/img is symlinked to ~/.triptic/content/img."""
+    public_dir = get_public_dir()
+    public_img = public_dir / "img"
+    content_img = get_content_dir() / "img"
+
+    # Create content img directory
+    content_img.mkdir(parents=True, exist_ok=True)
+
+    # Remove existing img if it's not a symlink
+    if public_img.exists() and not public_img.is_symlink():
+        import shutil
+        print(f"[triptic] Warning: {public_img} exists but is not a symlink. Moving to {public_img}.backup")
+        shutil.move(str(public_img), str(public_img) + ".backup")
+
+    # Create symlink if it doesn't exist
+    if not public_img.exists():
+        public_img.symlink_to(content_img)
+        print(f"[triptic] Created symlink: {public_img} -> {content_img}")
+
+
 def run_server(port: int = 3000, host: str = "localhost") -> None:
     """Run the server in the foreground."""
     public_dir = get_public_dir()
+
+    # Ensure content directory and symlink are set up
+    ensure_content_symlink()
+
     print(f"[triptic] Serving from: {public_dir}")
+    print(f"[triptic] Content dir: {get_content_dir()}")
     print(f"[triptic] Server running at http://{host}:{port}")
     print(f"\n[triptic] URLs:")
     print(f"  Dashboard:  http://{host}:{port}/")

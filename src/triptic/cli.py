@@ -12,6 +12,7 @@ from pathlib import Path
 from triptic.server import (
     TripticServer,
     add_to_playlist,
+    get_content_dir,
     get_playlists,
     get_public_dir,
     list_imagesets,
@@ -231,12 +232,12 @@ def cmd_imgen(args: argparse.Namespace) -> int:
     prompt = args.prompt
     playlist = args.playlist if hasattr(args, 'playlist') and args.playlist else None
 
-    # Determine the directory to save images
-    public_dir = get_public_dir()
-    img_dir = public_dir / "img"
+    # Determine the directory to save images (use content directory)
+    content_dir = get_content_dir()
+    img_dir = content_dir / "img"
 
     if playlist:
-        # Save to playlist-specific directory (e.g., img/animals/name.{left,center,right}.svg)
+        # Save to playlist-specific directory (e.g., ~/.triptic/content/img/animals/name.{left,center,right}.svg)
         output_dir = img_dir / playlist
         output_dir.mkdir(parents=True, exist_ok=True)
         output_paths = {
@@ -245,7 +246,7 @@ def cmd_imgen(args: argparse.Namespace) -> int:
             'right': output_dir / f"{name}.right.svg",
         }
     else:
-        # Save to screen-specific directories (e.g., img/left/name.svg)
+        # Save to screen-specific directories (e.g., ~/.triptic/content/img/left/name.svg)
         output_paths = {
             'left': img_dir / "left" / f"{name}.svg",
             'center': img_dir / "center" / f"{name}.svg",
