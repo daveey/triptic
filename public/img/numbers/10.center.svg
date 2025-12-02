@@ -1,0 +1,12 @@
+<svg width="1080" height="1920" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1080" height="1920" fill="#c0392b"/>
+  <text x="540" y="860" font-family="Arial, sans-serif" font-size="120" fill="#ecf0f1" text-anchor="middle" font-weight="bold">
+    10 - Ten
+  </text>
+  <text x="540" y="1000" font-family="Arial, sans-serif" font-size="60" fill="#95a5a6" text-anchor="middle">
+    CENTER
+  </text>
+  <text x="540" y="1100" font-family="Arial, sans-serif" font-size="80" fill="#3498db" text-anchor="middle">
+    #10
+  </text>
+</svg>

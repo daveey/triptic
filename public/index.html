@@ -55,9 +55,17 @@
             // Configuration
             const IMAGE_COUNT = 6;
             const POLL_INTERVAL = 100; // ms for loading check
+            let FREQUENCY_SECONDS = 60; // Default frequency in seconds
 
             // State
-            let screenId = document.URL.split("#")[1] || "";
+            // Check for ?id=X parameter, fallback to hash, or redirect to dashboard
+            const urlParams = new URLSearchParams(window.location.search);
+            let screenId = urlParams.get('id') || document.URL.split("#")[1] || "";
+
+            // If no screen ID specified, redirect to dashboard
+            if (!screenId) {
+                window.location.href = '/dashboard.html';
+            }
             let imageUrls = [];
             let images = [];
             let numImagesLoaded = 0;
@@ -70,19 +78,30 @@
             const loadingEl = document.getElementById('loading');
             const errorEl = document.getElementById('error');
 
-            function buildImageUrls() {
-                const basePath = screenId ? `img/${screenId}/` : 'img/';
+            function buildImageUrls(playlistItems) {
                 imageUrls = [];
-                // Get extension from URL param or default to svg
-                const urlParams = new URLSearchParams(window.location.search);
-                const ext = urlParams.get('ext') || 'svg';
-                for (let i = 1; i <= IMAGE_COUNT; i++) {
-                    imageUrls.push(basePath + i + '.' + ext);
+                const cacheBuster = '?v=' + Date.now();
+                if (playlistItems && playlistItems.length > 0) {
+                    // Load from playlist
+                    playlistItems.forEach(function(item) {
+                        const url = item[screenId] || item['center'] || '';
+                        if (url) {
+                            imageUrls.push(url + cacheBuster);
+                        }
+                    });
+                } else {
+                    // Fallback to old behavior
+                    const basePath = screenId ? `img/${screenId}/` : 'img/';
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const ext = urlParams.get('ext') || 'svg';
+                    for (let i = 1; i <= IMAGE_COUNT; i++) {
+                        imageUrls.push(basePath + i + '.' + ext + cacheBuster);
+                    }
                 }
             }
 
             function loadImages() {
-                buildImageUrls();
+                // imageUrls should already be built by buildImageUrls() before calling this
                 numImagesLoaded = 0;
 
                 imageUrls.forEach(function(url, index) {
@@ -103,8 +122,9 @@
             }
 
             function updateLoadingProgress() {
-                loadingEl.textContent = 'Loading... ' + numImagesLoaded + '/' + IMAGE_COUNT;
-                if (numImagesLoaded >= IMAGE_COUNT) {
+                const expectedCount = imageUrls.length || IMAGE_COUNT;
+                loadingEl.textContent = 'Loading... ' + numImagesLoaded + '/' + expectedCount;
+                if (numImagesLoaded >= expectedCount) {
                     loadingComplete = true;
                     loadingEl.style.display = 'none';
                     displayImage();
@@ -113,36 +133,107 @@
             }
 
             function getCurrentImageIndex() {
+                const imageCount = imageUrls.length || IMAGE_COUNT;
                 const now = new Date();
-                return now.getMinutes() % IMAGE_COUNT;
+                const totalSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+                const cycleNumber = Math.floor(totalSeconds / FREQUENCY_SECONDS);
+                return cycleNumber % imageCount;
             }
 
             function displayImage() {
                 const index = getCurrentImageIndex();
                 if (index !== currentImageIndex) {
                     currentImageIndex = index;
+                    console.log('[DEBUG] Displaying image index:', index, 'url:', imageUrls[index]);
                     setBackground(imageUrls[index]);
                 }
             }
 
             function setBackground(imgUrl) {
+                console.log('[DEBUG] setBackground called with URL:', imgUrl);
                 displayEl.style.backgroundImage = 'url(' + imgUrl + ')';
+                console.log('[DEBUG] Background image set to:', displayEl.style.backgroundImage);
+            }
+
+            let currentPlaylistName = null;
+
+            function loadConfig() {
+                console.log('[DEBUG] loadConfig() called');
+                // Load both config and playlist
+                Promise.all([
+                    fetch('/config').then(function(r) { return r.json(); }),
+                    fetch('/playlist').then(function(r) { return r.json(); })
+                ]).then(function(results) {
+                    const config = results[0];
+                    const playlist = results[1];
+
+                    console.log('[DEBUG] Config and playlist loaded:', config, playlist);
+
+                    if (config.frequency) {
+                        FREQUENCY_SECONDS = config.frequency;
+                        console.log('Loaded frequency:', FREQUENCY_SECONDS, 'seconds');
+                    }
+
+                    if (playlist.items) {
+                        console.log('Loaded playlist:', playlist.name, 'with', playlist.items.length, 'items');
+                        currentPlaylistName = playlist.name;
+                        console.log('[DEBUG] Set currentPlaylistName to:', currentPlaylistName);
+                        buildImageUrls(playlist.items);
+                        console.log('[DEBUG] Built imageUrls:', imageUrls.length, 'items');
+                        loadImages();
+                    }
+                }).catch(function(err) {
+                    console.warn('Failed to load config/playlist, using defaults:', err);
+                    // Still try to load images with default behavior
+                    buildImageUrls(null);
+                    loadImages();
+                });
+            }
+
+            function checkForPlaylistChanges() {
+                fetch('/playlist').then(function(r) { return r.json(); }).then(function(playlist) {
+                    console.log('[DEBUG] checkForPlaylistChanges: current=', currentPlaylistName, 'server=', playlist.name);
+                    if (playlist.name !== currentPlaylistName) {
+                        console.log('Playlist changed from', currentPlaylistName, 'to', playlist.name, '- reloading page');
+                        // Force hard reload with cache bypass
+                        location.reload(true);
+                    }
+                }).catch(function(err) {
+                    console.warn('Failed to check playlist:', err);
+                });
+            }
+
+            function sendHeartbeat() {
+                if (!screenId) return; // Don't send heartbeat if no screen ID
+
+                fetch('/heartbeat/' + screenId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }).catch(function(err) {
+                    console.warn('Failed to send heartbeat:', err);
+                });
             }
 
             function startUpdateTimer() {
-                // Calculate time until next minute
-                const now = new Date();
-                const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+                // Send initial heartbeat
+                sendHeartbeat();
 
-                // Set timeout for next minute, then interval every minute
-                setTimeout(function() {
+                // Check for image updates every second
+                updateInterval = setInterval(function() {
                     displayImage();
-                    updateInterval = setInterval(displayImage, 60000);
-                }, msUntilNextMinute);
+                }, 1000);
+
+                // Send heartbeat every minute
+                setInterval(sendHeartbeat, 60000);
+
+                // Check for playlist changes every 5 seconds
+                setInterval(checkForPlaylistChanges, 5000);
             }
 
             function onLoad() {
-                loadImages();
+                loadConfig();
 
                 // Fallback polling in case images never load (timeout after 30s)
                 setTimeout(function() {

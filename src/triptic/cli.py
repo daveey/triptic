@@ -1,14 +1,22 @@
 """Command-line interface for triptic."""
 
 import argparse
+import json
 import os
 import signal
 import sys
 import time
-import webbrowser
+from datetime import datetime
 from pathlib import Path
 
-from triptic.server import TripticServer, get_public_dir, run_server
+from triptic.server import (
+    TripticServer,
+    get_playlists,
+    get_public_dir,
+    list_imagesets,
+    run_server,
+    set_current_playlist,
+)
 
 
 def get_pid_file() -> Path:
@@ -48,6 +56,47 @@ def is_process_running(pid: int) -> bool:
         return False
 
 
+def get_state_file() -> Path:
+    """Get the path to the state file."""
+    return Path.home() / ".triptic.state"
+
+
+def read_screen_states() -> dict:
+    """Read screen states from the state file."""
+    state_file = get_state_file()
+    if not state_file.exists():
+        return {}
+    try:
+        with open(state_file, 'r') as f:
+            state = json.load(f)
+            return state.get('screens', {})
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def format_time_since(iso_timestamp: str) -> str:
+    """Format time since a timestamp in a human-readable way."""
+    try:
+        last_sync = datetime.fromisoformat(iso_timestamp)
+        now = datetime.now()
+        delta = now - last_sync
+
+        seconds = int(delta.total_seconds())
+        if seconds < 60:
+            return f"{seconds}s ago"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            return f"{minutes}m ago"
+        elif seconds < 86400:
+            hours = seconds // 3600
+            return f"{hours}h ago"
+        else:
+            days = seconds // 86400
+            return f"{days}d ago"
+    except (ValueError, AttributeError):
+        return "unknown"
+
+
 def cmd_start(args: argparse.Namespace) -> int:
     """Start the triptic server."""
     # Check if already running
@@ -67,6 +116,12 @@ def cmd_start(args: argparse.Namespace) -> int:
             write_pid(pid)
             print(f"[triptic] Server started in background (PID: {pid})")
             print(f"[triptic] Listening at http://{host}:{port}")
+            print(f"\n[triptic] URLs:")
+            print(f"  Dashboard:  http://{host}:{port}/dashboard.html")
+            print(f"  Playlists:  http://{host}:{port}/playlists.html")
+            print(f"  Left:       http://{host}:{port}/#left")
+            print(f"  Center:     http://{host}:{port}/#center")
+            print(f"  Right:      http://{host}:{port}/#right")
             return 0
         else:
             # Child process - run server
@@ -120,39 +175,53 @@ def cmd_stop(args: argparse.Namespace) -> int:
         return 1
 
 
-def cmd_test(args: argparse.Namespace) -> int:
-    """Run the test simulator."""
-    port = args.port
-    host = args.host
+def cmd_imageset(args: argparse.Namespace) -> int:
+    """Manage image sets."""
+    if args.imageset_action == 'list':
+        prefix = args.prefix if hasattr(args, 'prefix') and args.prefix else None
+        imagesets = list_imagesets(prefix)
 
-    # Start server
-    server = TripticServer(port=port, host=host)
+        if not imagesets:
+            if prefix:
+                print(f"[triptic] No image sets found with prefix '{prefix}'")
+            else:
+                print("[triptic] No image sets found")
+            return 1
 
-    try:
-        print(f"[triptic] Starting test server...")
-        server.start()
-        print(f"[triptic] Server running at http://{host}:{port}")
+        print(f"[triptic] Image sets{' with prefix ' + prefix if prefix else ''}:")
+        for name, files in imagesets:
+            left = files.get('left', 'N/A')
+            center = files.get('center', 'N/A')
+            right = files.get('right', 'N/A')
+            print(f"  {name}:")
+            print(f"    ({left}, {center}, {right})")
+        return 0
+    else:
+        print(f"[triptic] Error: unknown imageset action '{args.imageset_action}'")
+        return 1
 
-        # Open test page in browser
-        test_url = f"http://{host}:{port}/test.html"
-        print(f"[triptic] Opening test simulator: {test_url}")
 
-        if not args.no_browser:
-            webbrowser.open(test_url)
-
-        print(f"[triptic] Press Ctrl+C to stop")
-
-        # Keep running until interrupted
-        while True:
-            time.sleep(1)
-
-    except KeyboardInterrupt:
-        print("\n[triptic] Stopping server...")
-    finally:
-        server.stop()
-        print("[triptic] Server stopped")
-
-    return 0
+def cmd_playlist(args: argparse.Namespace) -> int:
+    """Manage playlists."""
+    if args.playlist_action == 'list':
+        playlists = get_playlists()
+        print("[triptic] Available playlists:")
+        for name in sorted(playlists.keys()):
+            print(f"  - {name}")
+        return 0
+    elif args.playlist_action == 'set':
+        if not args.name:
+            print("[triptic] Error: playlist name required")
+            return 1
+        if set_current_playlist(args.name):
+            print(f"[triptic] Playlist set to: {args.name}")
+            return 0
+        else:
+            print(f"[triptic] Error: playlist '{args.name}' not found")
+            return 1
+    else:
+        print(f"[triptic] Error: unknown playlist action '{args.playlist_action}'")
+        return 1
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -164,6 +233,22 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     if is_process_running(pid):
         print(f"[triptic] Server is running (PID: {pid})")
+
+        # Display screen sync status
+        screens = read_screen_states()
+        if screens:
+            print("\nScreen status:")
+            for screen_id in sorted(screens.keys()):
+                screen_data = screens[screen_id]
+                last_sync = screen_data.get('last_sync')
+                if last_sync:
+                    time_ago = format_time_since(last_sync)
+                    print(f"  {screen_id}: {time_ago}")
+                else:
+                    print(f"  {screen_id}: never synced")
+        else:
+            print("\nNo screens have synced yet")
+
         return 0
     else:
         print(f"[triptic] Server is not running (stale PID: {pid})")
@@ -209,32 +294,41 @@ def main() -> int:
     stop_parser = subparsers.add_parser("stop", help="Stop the triptic server")
     stop_parser.set_defaults(func=cmd_stop)
 
-    # Test command
-    test_parser = subparsers.add_parser(
-        "test",
-        help="Run the test simulator with 3 iframes",
-    )
-    test_parser.add_argument(
-        "-p", "--port",
-        type=int,
-        default=int(os.environ.get("PORT", 3000)),
-        help="Port to listen on (default: 3000)",
-    )
-    test_parser.add_argument(
-        "-H", "--host",
-        default="localhost",
-        help="Host to bind to (default: localhost)",
-    )
-    test_parser.add_argument(
-        "--no-browser",
-        action="store_true",
-        help="Don't open the browser automatically",
-    )
-    test_parser.set_defaults(func=cmd_test)
-
     # Status command
     status_parser = subparsers.add_parser("status", help="Check server status")
     status_parser.set_defaults(func=cmd_status)
+
+    # ImageSet command (with alias 'is')
+    imageset_parser = subparsers.add_parser(
+        "imageset",
+        aliases=["is"],
+        help="Manage image sets"
+    )
+    imageset_parser.add_argument(
+        "imageset_action",
+        choices=["list"],
+        help="Action to perform"
+    )
+    imageset_parser.add_argument(
+        "prefix",
+        nargs="?",
+        help="Optional prefix to filter image sets (e.g., 'numbers/1')",
+    )
+    imageset_parser.set_defaults(func=cmd_imageset)
+
+    # Playlist command
+    playlist_parser = subparsers.add_parser("playlist", help="Manage playlists")
+    playlist_parser.add_argument(
+        "playlist_action",
+        choices=["list", "set"],
+        help="Action to perform (list or set)",
+    )
+    playlist_parser.add_argument(
+        "name",
+        nargs="?",
+        help="Playlist name (required for 'set' action)",
+    )
+    playlist_parser.set_defaults(func=cmd_playlist)
 
     args = parser.parse_args()
 

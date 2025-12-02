@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triptic - Playlists</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
+        }
+
+        .header {
+            background: #16213e;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .nav {
+            background: #16213e;
+            padding: 10px 20px;
+            border-bottom: 1px solid #0f3460;
+            text-align: center;
+        }
+
+        .nav a {
+            color: #e94560;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+
+        .nav a:hover {
+            color: #ff6b6b;
+        }
+
+        .nav a.active {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .playlist {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 2px solid #0f3460;
+        }
+
+        .playlist.active {
+            border-color: #e94560;
+        }
+
+        .playlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .playlist-title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .playlist-badge {
+            background: #e94560;
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .playlist-actions button {
+            background: #0f3460;
+            border: 1px solid #1a4d7a;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .playlist-actions button:hover {
+            background: #1a4d7a;
+        }
+
+        .playlist-actions button.active {
+            background: #e94560;
+            border-color: #e94560;
+        }
+
+        .expand-toggle {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px 10px;
+            transition: color 0.2s;
+        }
+
+        .expand-toggle:hover {
+            color: #fff;
+        }
+
+        .triplets {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .triplets.expanded {
+            max-height: 10000px;
+            margin-top: 15px;
+        }
+
+        .triplets.loading {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        .triplet {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .triplet-number {
+            color: #888;
+            font-size: 14px;
+            width: 30px;
+            text-align: right;
+        }
+
+        .triplet-images {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .triplet-screen {
+            flex: 1;
+            background: #0d0d0d;
+            border: 2px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .screen-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .screen-image {
+            max-width: 100%;
+            height: 150px;
+            object-fit: contain;
+            background: #000;
+            border-radius: 2px;
+        }
+
+        .screen-path {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+            font-family: monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Triptic Playlists</h1>
+        <p>Manage and preview your triptic playlists</p>
+    </div>
+
+    <div class="nav">
+        <a href="/dashboard.html">Dashboard</a>
+        <a href="/playlists.html" class="active">Playlists</a>
+    </div>
+
+    <div class="container">
+        <div id="playlists-container">
+            <div class="loading">Loading playlists...</div>
+        </div>
+    </div>
+
+    <script>
+        let currentPlaylist = '';
+        let allPlaylists = {};
+
+        async function loadAllPlaylists() {
+            try {
+                // Get list of playlists and current playlist
+                const playlistsResponse = await fetch('/playlists');
+                const playlistsData = await playlistsResponse.json();
+                currentPlaylist = playlistsData.current;
+
+                // Get all playlist items
+                const stateResponse = await fetch('/playlist');
+                const stateData = await stateResponse.json();
+
+                // For now, we'll need to load each playlist's data
+                // Since we don't have an endpoint for that, we'll use what we have
+                allPlaylists = {
+                    [stateData.name]: stateData.items
+                };
+
+                // If we need all playlists, we'd need to add that endpoint
+                // For now, just show the current one prominently
+                displayPlaylists(playlistsData.playlists, currentPlaylist, allPlaylists);
+            } catch (err) {
+                console.error('Failed to load playlists:', err);
+                document.getElementById('playlists-container').innerHTML =
+                    '<div class="loading">Failed to load playlists</div>';
+            }
+        }
+
+        function displayPlaylists(playlistNames, current, playlistData) {
+            const container = document.getElementById('playlists-container');
+            container.innerHTML = '';
+
+            playlistNames.forEach(function(name) {
+                const playlist = document.createElement('div');
+                playlist.className = 'playlist' + (name === current ? ' active' : '');
+                playlist.id = 'playlist-' + name;
+
+                const header = document.createElement('div');
+                header.className = 'playlist-header';
+
+                const titleContainer = document.createElement('div');
+                titleContainer.style.display = 'flex';
+                titleContainer.style.alignItems = 'center';
+                titleContainer.style.gap = '10px';
+
+                const title = document.createElement('div');
+                title.className = 'playlist-title';
+                title.textContent = name;
+                titleContainer.appendChild(title);
+
+                if (name === current) {
+                    const badge = document.createElement('span');
+                    badge.className = 'playlist-badge';
+                    badge.textContent = 'Active';
+                    titleContainer.appendChild(badge);
+                }
+
+                // Add expand/collapse button for non-active playlists
+                if (name !== current) {
+                    const expandBtn = document.createElement('button');
+                    expandBtn.className = 'expand-toggle';
+                    expandBtn.textContent = '▼';
+                    expandBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        togglePlaylist(name);
+                    };
+                    titleContainer.insertBefore(expandBtn, title);
+
+                    // Make title clickable too
+                    title.style.cursor = 'pointer';
+                    title.onclick = () => togglePlaylist(name);
+                } else {
+                    // Active playlist title is also clickable
+                    title.style.cursor = 'pointer';
+                    title.onclick = () => togglePlaylist(name);
+                }
+
+                const actions = document.createElement('div');
+                actions.className = 'playlist-actions';
+
+                if (name !== current) {
+                    const setButton = document.createElement('button');
+                    setButton.textContent = 'Set as Active';
+                    setButton.onclick = () => setPlaylist(name);
+                    actions.appendChild(setButton);
+                } else {
+                    const activeButton = document.createElement('button');
+                    activeButton.textContent = 'Currently Active';
+                    activeButton.className = 'active';
+                    activeButton.disabled = true;
+                    actions.appendChild(activeButton);
+                }
+
+                header.appendChild(titleContainer);
+                header.appendChild(actions);
+                playlist.appendChild(header);
+
+                // Create triplets container
+                const triplets = document.createElement('div');
+                triplets.className = 'triplets';
+                triplets.id = 'triplets-' + name;
+
+                // If we have data for this playlist, display it immediately
+                if (playlistData[name]) {
+                    playlistData[name].forEach(function(item, index) {
+                        const triplet = createTriplet(index + 1, item);
+                        triplets.appendChild(triplet);
+                    });
+                    // Auto-expand active playlist
+                    if (name === current) {
+                        triplets.classList.add('expanded');
+                    }
+                }
+
+                playlist.appendChild(triplets);
+                container.appendChild(playlist);
+            });
+        }
+
+        async function togglePlaylist(name) {
+            const triplets = document.getElementById('triplets-' + name);
+            const expandBtn = document.querySelector('#playlist-' + name + ' .expand-toggle');
+
+            if (triplets.classList.contains('expanded')) {
+                // Collapse
+                triplets.classList.remove('expanded');
+                if (expandBtn) expandBtn.textContent = '▼';
+            } else {
+                // Expand
+                if (expandBtn) expandBtn.textContent = '▲';
+                triplets.classList.add('expanded');
+
+                // Load data if not already loaded
+                if (triplets.children.length === 0) {
+                    triplets.innerHTML = '<div class="loading">Loading...</div>';
+                    try {
+                        const response = await fetch('/playlists/' + name);
+                        const data = await response.json();
+                        triplets.innerHTML = '';
+                        data.items.forEach(function(item, index) {
+                            const triplet = createTriplet(index + 1, item);
+                            triplets.appendChild(triplet);
+                        });
+                    } catch (err) {
+                        console.error('Failed to load playlist:', err);
+                        triplets.innerHTML = '<div class="loading">Failed to load</div>';
+                    }
+                }
+            }
+        }
+
+        function createTriplet(number, item) {
+            const triplet = document.createElement('div');
+            triplet.className = 'triplet';
+
+            const numberEl = document.createElement('div');
+            numberEl.className = 'triplet-number';
+            numberEl.textContent = number;
+            triplet.appendChild(numberEl);
+
+            const images = document.createElement('div');
+            images.className = 'triplet-images';
+
+            ['left', 'center', 'right'].forEach(function(screen) {
+                const screenDiv = document.createElement('div');
+                screenDiv.className = 'triplet-screen';
+
+                const label = document.createElement('div');
+                label.className = 'screen-label';
+                label.textContent = screen;
+                screenDiv.appendChild(label);
+
+                const img = document.createElement('img');
+                img.className = 'screen-image';
+                img.src = item[screen] || '';
+                img.alt = screen + ' screen';
+                img.onerror = function() {
+                    this.style.display = 'none';
+                };
+                screenDiv.appendChild(img);
+
+                const path = document.createElement('div');
+                path.className = 'screen-path';
+                path.textContent = item[screen] || 'N/A';
+                path.title = item[screen] || '';
+                screenDiv.appendChild(path);
+
+                images.appendChild(screenDiv);
+            });
+
+            triplet.appendChild(images);
+            return triplet;
+        }
+
+        async function setPlaylist(name) {
+            try {
+                const response = await fetch('/playlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: name })
+                });
+
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    console.error('Failed to set playlist');
+                }
+            } catch (err) {
+                console.error('Failed to set playlist:', err);
+            }
+        }
+
+        // Initialize
+        loadAllPlaylists();
+    </script>
+</body>
+</html>
