@@ -11,6 +11,7 @@ from pathlib import Path
 
 from triptic.server import (
     TripticServer,
+    add_to_playlist,
     get_playlists,
     get_public_dir,
     list_imagesets,
@@ -266,9 +267,26 @@ def cmd_imgen(args: argparse.Namespace) -> int:
             if path.exists():
                 print(f"  {screen}: {path}")
 
+        # Add to playlist if specified
         if playlist:
-            print(f"\n[triptic] To add to playlist, run:")
-            print(f"  triptic playlist add {playlist} {playlist}/{name}")
+            imageset_name = f"{playlist}/{name}"
+            if add_to_playlist(playlist, imageset_name):
+                print(f"\n[triptic] Added '{imageset_name}' to playlist '{playlist}'")
+            else:
+                print(f"\n[triptic] Warning: Could not add to playlist '{playlist}' (playlist may not exist)")
+
+        # Generate dashboard URL
+        port = os.environ.get("PORT", "3000")
+        host = os.environ.get("HOST", "localhost")
+
+        # Create a URL to view this specific triplet in the dashboard
+        # The dashboard will need to support ?preview=imageset_name parameter
+        if playlist:
+            preview_url = f"http://{host}:{port}/dashboard.html?preview={playlist}/{name}"
+        else:
+            preview_url = f"http://{host}:{port}/dashboard.html"
+
+        print(f"\n[triptic] View triplet: {preview_url}")
 
         return 0
     except Exception as e:

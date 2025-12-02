@@ -357,6 +357,32 @@ def set_current_playlist(playlist_name: str) -> bool:
     return True
 
 
+def add_to_playlist(playlist_name: str, imageset_name: str) -> bool:
+    """
+    Add an imageset to a playlist.
+
+    Args:
+        playlist_name: Name of the playlist to add to
+        imageset_name: Name of the imageset to add (e.g., 'animals/11')
+
+    Returns:
+        True if successful, False if playlist doesn't exist
+    """
+    state = read_state()
+    if 'playlists' not in state:
+        state['playlists'] = get_default_playlists()
+
+    if playlist_name not in state['playlists']:
+        return False
+
+    # Add to playlist if not already present
+    if imageset_name not in state['playlists'][playlist_name]:
+        state['playlists'][playlist_name].append(imageset_name)
+        write_state(state)
+
+    return True
+
+
 def get_playlist_items(playlist_name: str = None) -> list:
     """
     Get items from a playlist, resolving imageset names to file paths.

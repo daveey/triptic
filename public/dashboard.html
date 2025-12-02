@@ -212,7 +212,14 @@
                 <option value="">Loading...</option>
             </select>
         </label>
+        <label style="position: relative;">
+            Preview Imageset:
+            <input type="text" id="imageset-search" placeholder="Type to search..."
+                   style="width: 200px; padding: 8px 12px; background: #1a1a2e; border: 1px solid #0f3460; color: #fff; border-radius: 4px; font-size: 14px;">
+            <div id="imageset-suggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #16213e; border: 1px solid #0f3460; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; margin-top: 2px;"></div>
+        </label>
         <button onclick="reloadScreens()">Reload Screens</button>
+        <button onclick="clearPreview()" id="clear-preview-btn" style="display: none;">Clear Preview</button>
         <div class="time-display" id="time">--:--:--</div>
         <div id="save-indicator" style="display: none; color: #4caf50; font-size: 12px; padding: 8px;">✓ Saved</div>
     </div>
@@ -394,17 +401,127 @@
             }
         }
 
+        // Imageset search and preview
+        let allImagesets = [];
+        let currentPreview = null;
+
+        async function loadImagesets() {
+            try {
+                const response = await fetch('/imagesets');
+                const data = await response.json();
+                allImagesets = data.imagesets.map(function(item) { return item.name; });
+            } catch (err) {
+                console.warn('Failed to load imagesets:', err);
+            }
+        }
+
+        function filterImagesets(query) {
+            if (!query) return [];
+            const lowerQuery = query.toLowerCase();
+            return allImagesets.filter(function(name) {
+                return name.toLowerCase().includes(lowerQuery);
+            }).slice(0, 10);
+        }
+
+        function showImagesetSuggestions(suggestions) {
+            const container = document.getElementById('imageset-suggestions');
+            if (suggestions.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.innerHTML = '';
+            suggestions.forEach(function(name) {
+                const div = document.createElement('div');
+                div.textContent = name;
+                div.style.padding = '8px 12px';
+                div.style.cursor = 'pointer';
+                div.style.borderBottom = '1px solid #0f3460';
+                div.onmouseover = function() { div.style.background = '#0f3460'; };
+                div.onmouseout = function() { div.style.background = 'transparent'; };
+                div.onclick = function() {
+                    document.getElementById('imageset-search').value = name;
+                    container.style.display = 'none';
+                    previewImageset(name);
+                };
+                container.appendChild(div);
+            });
+            container.style.display = 'block';
+        }
+
+        async function previewImageset(imagesetName) {
+            currentPreview = imagesetName;
+            document.getElementById('clear-preview-btn').style.display = 'inline-block';
+
+            try {
+                const response = await fetch('/imagesets?prefix=' + encodeURIComponent(imagesetName));
+                const data = await response.json();
+
+                if (data.imagesets && data.imagesets.length > 0) {
+                    const imageset = data.imagesets[0];
+                    const files = imageset.files;
+
+                    // Update iframes to show this specific imageset
+                    const baseUrl = window.location.origin + '/index.html';
+                    document.getElementById('iframe-left').src = baseUrl + '?id=left&preview=' + encodeURIComponent(imagesetName);
+                    document.getElementById('iframe-center').src = baseUrl + '?id=center&preview=' + encodeURIComponent(imagesetName);
+                    document.getElementById('iframe-right').src = baseUrl + '?id=right&preview=' + encodeURIComponent(imagesetName);
+                }
+            } catch (err) {
+                console.error('Failed to preview imageset:', err);
+            }
+        }
+
+        function clearPreview() {
+            currentPreview = null;
+            document.getElementById('imageset-search').value = '';
+            document.getElementById('clear-preview-btn').style.display = 'none';
+            reloadScreens();
+        }
+
+        // Check URL for preview parameter
+        function checkPreviewParam() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const preview = urlParams.get('preview');
+            if (preview) {
+                document.getElementById('imageset-search').value = preview;
+                previewImageset(preview);
+            }
+        }
+
         // Event listeners
         document.getElementById('scale').addEventListener('change', updateScreenSizes);
         document.getElementById('gap').addEventListener('change', updateScreenSizes);
         document.getElementById('frequency').addEventListener('change', updateFrequency);
         document.getElementById('playlist').addEventListener('change', updatePlaylist);
 
+        const imagesetSearch = document.getElementById('imageset-search');
+        imagesetSearch.addEventListener('input', function(e) {
+            const suggestions = filterImagesets(e.target.value);
+            showImagesetSuggestions(suggestions);
+        });
+
+        imagesetSearch.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.value) {
+                document.getElementById('imageset-suggestions').style.display = 'none';
+                previewImageset(e.target.value);
+            }
+        });
+
+        // Close suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#imageset-search') && !e.target.closest('#imageset-suggestions')) {
+                document.getElementById('imageset-suggestions').style.display = 'none';
+            }
+        });
+
         // Initialize
         updateScreenSizes();
         loadScreens();
         loadFrequency();
         loadPlaylists();
+        loadImagesets();
+        checkPreviewParam();
         updateTime();
         setInterval(updateTime, 1000);
     </script>
