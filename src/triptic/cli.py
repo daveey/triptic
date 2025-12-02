@@ -224,6 +224,58 @@ def cmd_playlist(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_imgen(args: argparse.Namespace) -> int:
+    """Generate images for a playlist item."""
+    name = args.name
+    prompt = args.prompt
+    playlist = args.playlist if hasattr(args, 'playlist') and args.playlist else None
+
+    # Determine the directory to save images
+    public_dir = get_public_dir()
+    img_dir = public_dir / "img"
+
+    if playlist:
+        # Save to playlist-specific directory (e.g., img/animals/name.{left,center,right}.svg)
+        output_dir = img_dir / playlist
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_paths = {
+            'left': output_dir / f"{name}.left.svg",
+            'center': output_dir / f"{name}.center.svg",
+            'right': output_dir / f"{name}.right.svg",
+        }
+    else:
+        # Save to screen-specific directories (e.g., img/left/name.svg)
+        output_paths = {
+            'left': img_dir / "left" / f"{name}.svg",
+            'center': img_dir / "center" / f"{name}.svg",
+            'right': img_dir / "right" / f"{name}.svg",
+        }
+        for screen_dir in [img_dir / "left", img_dir / "center", img_dir / "right"]:
+            screen_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"[triptic] Generating images for '{name}' with prompt: {prompt}")
+
+    # Generate SVG images for each screen
+    from triptic.imgen import generate_svg_triplet
+
+    try:
+        result = generate_svg_triplet(name, prompt, output_paths)
+
+        print(f"[triptic] Generated images:")
+        for screen, path in output_paths.items():
+            if path.exists():
+                print(f"  {screen}: {path}")
+
+        if playlist:
+            print(f"\n[triptic] To add to playlist, run:")
+            print(f"  triptic playlist add {playlist} {playlist}/{name}")
+
+        return 0
+    except Exception as e:
+        print(f"[triptic] Error generating images: {e}")
+        return 1
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """Check server status."""
     pid = read_pid()
@@ -329,6 +381,22 @@ def main() -> int:
         help="Playlist name (required for 'set' action)",
     )
     playlist_parser.set_defaults(func=cmd_playlist)
+
+    # ImGen command
+    imgen_parser = subparsers.add_parser("imgen", help="Generate images for a playlist item")
+    imgen_parser.add_argument(
+        "name",
+        help="Name/number of the image set (e.g., '1', 'elephant', etc.)",
+    )
+    imgen_parser.add_argument(
+        "prompt",
+        help="Text prompt describing the image to generate",
+    )
+    imgen_parser.add_argument(
+        "-p", "--playlist",
+        help="Playlist directory to save to (e.g., 'animals', 'numbers')",
+    )
+    imgen_parser.set_defaults(func=cmd_imgen)
 
     args = parser.parse_args()
 
