@@ -368,6 +368,12 @@
                 });
                 if (response.ok) {
                     showSaveIndicator();
+                    // Clear any preview when switching playlists
+                    if (currentPreview) {
+                        currentPreview = null;
+                        document.getElementById('imageset-search').value = '';
+                        document.getElementById('clear-preview-btn').style.display = 'none';
+                    }
                     // Reload the screens to show the new playlist
                     reloadScreens();
                 } else {
