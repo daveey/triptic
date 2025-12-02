@@ -3,6 +3,7 @@
 import http.server
 import json
 import os
+import shutil
 import socketserver
 import threading
 from collections import defaultdict
@@ -250,14 +251,31 @@ class TripticServer:
             self.thread.join()
 
 
+def get_state_dir() -> Path:
+    """Get the path to the state directory."""
+    state_dir = Path.home() / ".state"
+    state_dir.mkdir(exist_ok=True)
+    return state_dir
+
+
 def get_state_file() -> Path:
     """Get the path to the state file."""
-    return Path.home() / ".triptic.state"
+    return get_state_dir() / "triptic.json"
 
 
 def read_state() -> dict:
     """Read screen state from file."""
     state_file = get_state_file()
+
+    # Migrate old state file if it exists
+    old_state_file = Path.home() / ".triptic.state"
+    if old_state_file.exists() and not state_file.exists():
+        try:
+            shutil.copy2(old_state_file, state_file)
+            print(f"[triptic] Migrated state from {old_state_file} to {state_file}")
+        except Exception as e:
+            print(f"[triptic] Warning: Could not migrate old state file: {e}")
+
     if not state_file.exists():
         return {}
     try:
