@@ -1,0 +1,40 @@
+# Fly.io configuration for Triptic
+# See full documentation at https://fly.io/docs/reference/configuration/
+
+# Replace with your app name (must be globally unique)
+app = "triptic"
+primary_region = "sjc"  # San Jose - change to region near you
+
+# Build configuration
+[build]
+
+[env]
+  PORT = "8080"
+
+# HTTP service configuration
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0  # Scale to zero when idle
+
+  # Health check - adjust if your app needs more time to start
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/"
+
+# Persistent storage volume (required for SQLite + images)
+[mounts]
+  source = "triptic_data"
+  destination = "/data"
+  initial_size = "3gb"  # Start with 3GB (free tier)
+
+# VM resources
+[[vm]]
+  size = "shared-cpu-1x"  # 256MB RAM (free tier)
+  memory = "256mb"
+  cpus = 1
