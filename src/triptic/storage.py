@@ -322,7 +322,7 @@ def get_asset_file_path_by_group(asset_group_id: str, screen: str) -> Optional[P
     Get the file path for an asset by asset_group_id and screen.
 
     This function looks up the UUID from the database and returns the file path.
-    If no asset exists, returns the default placeholder asset for that screen.
+    If no asset exists or file doesn't exist, returns the default placeholder asset for that screen.
 
     Args:
         asset_group_id: The asset group identifier (e.g., 'cyberdoc3', 'art/jazz')
@@ -334,10 +334,11 @@ def get_asset_file_path_by_group(asset_group_id: str, screen: str) -> Optional[P
     content_uuid = get_asset_uuid(asset_group_id, screen)
     if content_uuid and not content_uuid.startswith('img/'):
         file_path = get_file_path(content_uuid)
-        if file_path:
+        # Check if file actually exists on filesystem
+        if file_path and file_path.exists():
             return file_path
 
-    # If no asset found, return default placeholder for this screen
+    # If no asset found or file doesn't exist, return default placeholder for this screen
     default_uuids = {
         'left': DEFAULT_LEFT_UUID,
         'center': DEFAULT_CENTER_UUID,
