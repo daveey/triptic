@@ -1809,8 +1809,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
             # Save as new version with new UUID
             new_uuid = str(uuid.uuid4())
-            new_path = storage.get_file_path(new_uuid, extension=image_path.suffix)
-            assert new_path, f"Failed to get storage path for new UUID: {new_uuid}"
+            assets_dir = storage.get_assets_dir()
+            new_path = assets_dir / f"{new_uuid}{image_path.suffix}"
             flipped.save(new_path)
 
             # Find current version to copy the prompt
