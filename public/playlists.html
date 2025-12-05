@@ -616,10 +616,11 @@
             ['left', 'center', 'right'].forEach(function(screen) {
                 const img = document.createElement('img');
                 img.className = 'triplet-thumbnail';
-                img.src = item[screen] || '';
+                img.src = item[screen] || `/defaults/default_${screen}.png`;
                 img.alt = screen;
                 img.onerror = function() {
-                    this.style.display = 'none';
+                    this.src = `/defaults/default_${screen}.png`;
+                    this.onerror = null; // Prevent infinite loop if default also fails
                 };
                 images.appendChild(img);
             });
