@@ -740,7 +740,7 @@
         async function loadAssetGroup(skipAutoGenerate = false) {
             try {
                 // Fetch asset group info from API (includes image URLs for current versions)
-                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}`);
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}`, { credentials: 'same-origin' });
 
                 // Handle 404 - asset group doesn't exist yet
                 if (response.status === 404) {
@@ -899,6 +899,7 @@
                 for (const screen of screens) {
                     try {
                         const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate/${screen}`, {
+                            credentials: 'same-origin',
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({ prompt: defaultPrompt })
@@ -933,7 +934,7 @@
 
         async function loadPrompt(promptUrl) {
             try {
-                const response = await fetch(promptUrl);
+                const response = await fetch(promptUrl, { credentials: 'same-origin' });
                 if (response.ok) {
                     const text = await response.text();
                     const lines = text.split('\n');
@@ -992,7 +993,7 @@
 
         async function loadScreenVersions(screen) {
             try {
-                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/versions/${screen}`);
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/versions/${screen}`, { credentials: 'same-origin' });
                 if (response.ok) {
                     const data = await response.json();
                     const { versions, current } = data;
@@ -1045,6 +1046,7 @@
                 showMessage(`Restoring version ${version} for ${screen}...`, 'success');
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/version/${screen}`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ version: version })
@@ -1077,6 +1079,7 @@
                 showMessage(`Deleting current version for ${screen}...`, 'success');
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/delete-version/${screen}`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'}
                 });
@@ -1111,7 +1114,7 @@
 
         async function loadPlaylists() {
             try {
-                const response = await fetch('/playlists');
+                const response = await fetch('/playlists', { credentials: 'same-origin' });
                 const data = await response.json();
                 allPlaylists = data.playlists || [];
             } catch (error) {
@@ -1124,7 +1127,7 @@
             playlistsWithAssetGroup.clear();
             for (const playlistName of allPlaylists) {
                 try {
-                    const response = await fetch(`/playlists/${encodeURIComponent(playlistName)}`);
+                    const response = await fetch(`/playlists/${encodeURIComponent(playlistName)}`, { credentials: 'same-origin' });
                     const data = await response.json();
                     if (data.items && data.items.length > 0) {
                         // Check if any item matches this asset group
@@ -1170,6 +1173,7 @@
                 if (isChecked) {
                     // Add to playlist
                     const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/add-to-playlists`, {
+                        credentials: 'same-origin',
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ playlists: [playlistName] })
@@ -1186,6 +1190,7 @@
                 } else {
                     // Remove from playlist
                     const response = await fetch(`/playlists/${encodeURIComponent(playlistName)}/remove`, {
+                        credentials: 'same-origin',
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ asset_group: assetGroupName })
@@ -1231,6 +1236,7 @@
                 showMessage('Duplicating asset group...', 'success');
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/duplicate`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ newName: newName.trim() })
@@ -1257,6 +1263,7 @@
 
             try {
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}`, {
+                    credentials: 'same-origin',
                     method: 'DELETE'
                 });
 
@@ -1296,6 +1303,7 @@
 
             try {
                 const response = await fetch('/prompt/fluff', {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ prompt: promptText })
@@ -1340,6 +1348,7 @@
 
             try {
                 const response = await fetch('/prompt/fluff-plus', {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ prompt: categoryPrompt })
@@ -1404,6 +1413,7 @@
 
             try {
                 const response = await fetch('/prompt/diff-single', {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -1490,6 +1500,7 @@
                 showMessage(`Copying ${sourceScreen} to ${targetScreen}...`, 'success');
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/copy`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ sourceScreen, targetScreen })
@@ -1526,6 +1537,7 @@
                 showMessage(`Swapping ${screen1} and ${screen2}...`, 'success');
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/swap`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ screen1, screen2 })
@@ -1582,6 +1594,7 @@
 
             try {
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/upload/${screen}`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/octet-stream'},
                     body: file
@@ -1617,6 +1630,7 @@
             try {
                 // Start video generation (returns immediately)
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/video/${screen}`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'}
                 });
@@ -1635,7 +1649,7 @@
                     // Poll for completion
                     const pollInterval = setInterval(async () => {
                         try {
-                            const statusResponse = await fetch(`/video-job/${jobId}`);
+                            const statusResponse = await fetch(`/video-job/${jobId}`, { credentials: 'same-origin' });
                             if (statusResponse.ok) {
                                 const statusData = await statusResponse.json();
 
@@ -1745,6 +1759,7 @@
                 const errors = [];
                 for (const screen of ['left', 'center', 'right']) {
                     const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate/${screen}`, {
+                        credentials: 'same-origin',
                         method: 'POST'
                     });
 
@@ -1793,6 +1808,7 @@
                 }
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate/${screen}`, {
+                    credentials: 'same-origin',
                     method: 'POST'
                 });
 
@@ -1825,6 +1841,7 @@
                 console.log('Saving prompt file:', content);
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/save-prompt`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'text/plain'},
                     body: content
@@ -1908,6 +1925,7 @@
 
             try {
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/flip/${screen}`, {
+                    credentials: 'same-origin',
                     method: 'POST'
                 });
 
@@ -1949,6 +1967,7 @@
                 showMessage(`Regenerating ${screen} with context from ${otherScreens.join(' and ')}...`, 'success');
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate-with-context/${screen}`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -2024,6 +2043,7 @@
                 console.log('[Morph] Making POST request to:', url);
 
                 const response = await fetch(url, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -2189,6 +2209,7 @@
                 showMessage('Renaming asset group...', 'success');
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(originalAssetGroupName)}/rename`, {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ newName: newName })

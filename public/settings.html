@@ -261,7 +261,7 @@
 
         async function loadVideoModels() {
             try {
-                const response = await fetch('/video-models');
+                const response = await fetch('/video-models', { credentials: 'same-origin' });
                 if (response.ok) {
                     const data = await response.json();
                     videoModels = data.models || [];
@@ -298,7 +298,7 @@
 
         async function loadSettings() {
             try {
-                const response = await fetch('/settings');
+                const response = await fetch('/settings', { credentials: 'same-origin' });
                 if (response.ok) {
                     const settings = await response.json();
 
@@ -383,6 +383,7 @@
 
             try {
                 const response = await fetch('/settings', {
+                    credentials: 'same-origin',
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(settings)

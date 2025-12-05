@@ -449,12 +449,12 @@
         async function loadAllPlaylists() {
             try {
                 // Get list of playlists and current playlist
-                const playlistsResponse = await fetch('/playlists');
+                const playlistsResponse = await fetch('/playlists', { credentials: 'same-origin' });
                 const playlistsData = await playlistsResponse.json();
                 currentPlaylist = playlistsData.current;
 
                 // Load all asset groups for typeahead
-                const assetGroupsResponse = await fetch('/asset-groups');
+                const assetGroupsResponse = await fetch('/asset-groups', { credentials: 'same-origin' });
                 const assetGroupsData = await assetGroupsResponse.json();
 
                 // Get all asset group names
@@ -463,7 +463,7 @@
 
                 // Load each playlist's items
                 const promises = playlistsData.playlists.map(async (name) => {
-                    const response = await fetch('/playlists/' + name);
+                    const response = await fetch('/playlists/' + name, { credentials: 'same-origin' });
                     const data = await response.json();
                     allPlaylists[name] = data.items;
                 });
@@ -764,6 +764,7 @@
                     const removeResponse = await fetch('/playlists/' + encodeURIComponent(sourcePlaylist) + '/remove', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
+                        credentials: 'same-origin',
                         body: JSON.stringify({ asset_group: assetGroupName })
                     });
 
@@ -776,6 +777,7 @@
                     const addResponse = await fetch('/asset-group/' + encodeURIComponent(assetGroupName) + '/add-to-playlists', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
+                        credentials: 'same-origin',
                         body: JSON.stringify({ playlists: [targetPlaylist] })
                     });
 
@@ -802,6 +804,7 @@
                 const response = await fetch('/playlists/' + playlistName + '/reorder', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
                     body: JSON.stringify({ order: order })
                 });
 
@@ -829,6 +832,7 @@
                 const response = await fetch('/playlists/' + playlistName + '/remove', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
                     body: JSON.stringify({ asset_group: assetGroupName })
                 });
 
@@ -849,6 +853,7 @@
                 const response = await fetch('/playlist', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
                     body: JSON.stringify({ name: name })
                 });
 
@@ -894,6 +899,7 @@
                     const createResponse = await fetch('/asset-group/create', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
+                        credentials: 'same-origin',
                         body: JSON.stringify({ id: search })
                     });
 
@@ -914,6 +920,7 @@
                 const response = await fetch('/asset-group/' + encodeURIComponent(search) + '/add-to-playlists', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
                     body: JSON.stringify({ playlists: [addModalPlaylist] })
                 });
 
@@ -1000,6 +1007,7 @@
                 const response = await fetch('/playlist/create', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
                     body: JSON.stringify({ name: playlistName })
                 });
 
@@ -1031,6 +1039,7 @@
                 const response = await fetch('/playlist/' + encodeURIComponent(oldName) + '/rename', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
                     body: JSON.stringify({ new_name: playlistName })
                 });
 
@@ -1054,7 +1063,8 @@
             try {
                 const response = await fetch('/playlist/' + encodeURIComponent(playlistName), {
                     method: 'DELETE',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin'
                 });
 
                 if (response.ok) {
