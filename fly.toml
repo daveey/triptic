@@ -28,7 +28,7 @@ primary_region = 'sjc'
     timeout = '10s'
     grace_period = '30s'
     method = 'GET'
-    path = '/wall.html'
+    path = '/index.html'
 
 [[vm]]
   size = 'shared-cpu-1x'
