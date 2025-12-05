@@ -601,6 +601,15 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             current_name = get_current_playlist()
             items = get_playlist_items(current_name)
 
+            # Check if there's a current asset group override
+            state = read_state()
+            current_asset_group = state.get('current_imageset_override')
+
+            # If there's an override, filter items to only that asset group
+            if current_asset_group:
+                items = [item for item in items if item.get('name') == current_asset_group]
+                logging.debug(f"Filtered playlist to current asset group: {current_asset_group}, {len(items)} items")
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
