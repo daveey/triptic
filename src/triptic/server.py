@@ -302,9 +302,14 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             decoded = base64.b64decode(auth_string).decode('utf-8')
             username, password = decoded.split(':', 1)
 
-            # Get credentials from environment or use defaults
-            expected_username = os.environ.get('TRIPTIC_AUTH_USERNAME', 'daveey')
-            expected_password = os.environ.get('TRIPTIC_AUTH_PASSWORD', 'daviddavid')
+            # Get credentials from environment (required)
+            expected_username = os.environ.get('TRIPTIC_AUTH_USERNAME')
+            expected_password = os.environ.get('TRIPTIC_AUTH_PASSWORD')
+
+            # If credentials not set, deny access
+            if not expected_username or not expected_password:
+                logging.error("TRIPTIC_AUTH_USERNAME and TRIPTIC_AUTH_PASSWORD must be set in environment")
+                return False
 
             return username == expected_username and password == expected_password
         except Exception as e:
@@ -1793,7 +1798,7 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
             # Load current image from storage
             current_uuid = screen_asset.current_version_uuid
-            image_path = storage.get_path(current_uuid)
+            image_path = storage.get_file_path(current_uuid)
             if not image_path or not image_path.exists():
                 self.send_error(404, "Image file not found")
                 return
@@ -1804,7 +1809,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
             # Save as new version with new UUID
             new_uuid = str(uuid.uuid4())
-            new_path = storage.get_path(new_uuid)
+            new_path = storage.get_file_path(new_uuid, extension=image_path.suffix)
+            assert new_path, f"Failed to get storage path for new UUID: {new_uuid}"
             flipped.save(new_path)
 
             # Find current version to copy the prompt
