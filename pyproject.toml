@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Time-based triptych display system for synchronized multi-screen installations"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "cairosvg>=2.8.2",
+    "google-genai>=1.52.0",
+    "pillow>=12.0.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -26,3 +30,15 @@ packages = ["src/triptic"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+timeout = 30
+markers = [
+    "genai: marks tests that require GEMINI_API_KEY and make real API calls",
+    "slow: marks tests that take a long time to run (e.g., video generation)",
+]
+
+[dependency-groups]
+dev = [
+    "playwright>=1.56.0",
+    "pytest-playwright>=0.7.2",
+    "pytest-timeout>=2.3.1",
+]

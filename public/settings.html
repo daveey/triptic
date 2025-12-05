@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triptic - Settings</title>
+    <link rel="stylesheet" href="/shared/nav.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
+            padding-top: 50px;
+            padding-bottom: 40px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .settings-card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid #0f3460;
+        }
+
+        .settings-card h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #e94560;
+            border-bottom: 1px solid #0f3460;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            color: #fff;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+
+        .form-group .hint {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .form-group .hint a {
+            color: #e94560;
+            text-decoration: none;
+        }
+
+        .form-group .hint a:hover {
+            color: #ff6b6b;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #1a1a2e;
+            border: 2px solid #0f3460;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .radio-option:hover {
+            border-color: #e94560;
+        }
+
+        .radio-option input[type="radio"] {
+            width: auto;
+            margin-right: 10px;
+        }
+
+        .radio-option.selected {
+            border-color: #e94560;
+            background: #252542;
+        }
+
+        .radio-option-content {
+            flex: 1;
+        }
+
+        .radio-option-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .radio-option-desc {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .btn-primary {
+            background: #e94560;
+            border: none;
+            color: #fff;
+            padding: 12px 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #ff6b6b;
+        }
+
+        .btn-primary:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .message {
+            padding: 12px 20px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .message.success {
+            background: #1a4d2e;
+            color: #4caf50;
+            border: 1px solid #2e7d32;
+        }
+
+        .message.error {
+            background: #4d1a1a;
+            color: #f44336;
+            border: 1px solid #7d2e2e;
+        }
+
+        .message.info {
+            background: #1a2a4d;
+            color: #2196f3;
+            border: 1px solid #2e4a7d;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <script src="/shared/nav.js"></script>
+
+    <div class="container">
+        <div id="message" class="message"></div>
+
+        <div class="settings-card">
+            <h2>Image Generation Model</h2>
+            <div class="form-group">
+                <label>Select the AI model to use for image generation:</label>
+                <div class="radio-group">
+                    <label class="radio-option" id="radio-imagen4">
+                        <input type="radio" name="model" value="imagen-4.0-generate-001">
+                        <div class="radio-option-content">
+                            <div class="radio-option-title">Imagen 4.0</div>
+                            <div class="radio-option-desc">Google's Imagen 4.0 - Highest quality image generation</div>
+                        </div>
+                    </label>
+                    <label class="radio-option" id="radio-imagen4-fast">
+                        <input type="radio" name="model" value="imagen-4.0-fast-generate-001">
+                        <div class="radio-option-content">
+                            <div class="radio-option-title">Imagen 4.0 Fast</div>
+                            <div class="radio-option-desc">Google's Imagen 4.0 Fast - Optimized for speed</div>
+                        </div>
+                    </label>
+                    <label class="radio-option" id="radio-grok">
+                        <input type="radio" name="model" value="grok-vision-beta">
+                        <div class="radio-option-content">
+                            <div class="radio-option-title">Grok Vision (Coming Soon)</div>
+                            <div class="radio-option-desc">xAI's Grok image generation model (requires Grok API token)</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Video Generation Model</h2>
+            <div class="form-group">
+                <label>Select the AI model to use for video generation:</label>
+                <select id="video-model-select">
+                    <option value="">Loading models...</option>
+                </select>
+                <div class="hint" id="video-model-hint"></div>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>API Tokens</h2>
+            <div class="form-group">
+                <label for="gemini-token">Gemini API Token</label>
+                <input type="password" id="gemini-token" placeholder="Enter your Gemini API key">
+                <div class="hint">
+                    Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="grok-token">Grok API Token (Optional)</label>
+                <input type="password" id="grok-token" placeholder="Enter your Grok API key (coming soon)">
+                <div class="hint">
+                    Required for using Grok image generation models
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+        </div>
+    </div>
+
+    <script>
+        let settingsLoaded = false;
+        let videoModels = [];
+
+        async function loadVideoModels() {
+            try {
+                const response = await fetch('/video-models');
+                if (response.ok) {
+                    const data = await response.json();
+                    videoModels = data.models || [];
+
+                    const select = document.getElementById('video-model-select');
+                    select.innerHTML = '';
+
+                    if (videoModels.length === 0) {
+                        select.innerHTML = '<option value="">No video models available</option>';
+                        document.getElementById('video-model-hint').textContent = 'Configure your Gemini API token to load available models';
+                    } else {
+                        videoModels.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model.name;
+                            option.textContent = model.display_name || model.name;
+                            option.title = model.description || '';
+                            select.appendChild(option);
+                        });
+                        document.getElementById('video-model-hint').textContent = 'Select a model for video generation';
+                    }
+                } else {
+                    console.warn('Failed to load video models');
+                    const select = document.getElementById('video-model-select');
+                    select.innerHTML = '<option value="veo-2.0-generate-001">Veo 2.0 (default)</option>';
+                    document.getElementById('video-model-hint').textContent = 'Configure your Gemini API token to load more models';
+                }
+            } catch (err) {
+                console.error('Error loading video models:', err);
+                const select = document.getElementById('video-model-select');
+                select.innerHTML = '<option value="veo-2.0-generate-001">Veo 2.0 (default)</option>';
+                document.getElementById('video-model-hint').textContent = 'Error loading models. Using default.';
+            }
+        }
+
+        async function loadSettings() {
+            try {
+                const response = await fetch('/settings');
+                if (response.ok) {
+                    const settings = await response.json();
+
+                    // Set model selection
+                    const model = settings.model || 'imagen-3.0-generate-001';
+                    const radio = document.querySelector(`input[name="model"][value="${model}"]`);
+                    if (radio) {
+                        radio.checked = true;
+                        updateRadioStyles();
+                    }
+
+                    // Set API tokens (only if they exist and are not empty)
+                    if (settings.gemini_api_key) {
+                        document.getElementById('gemini-token').value = settings.gemini_api_key;
+                    }
+                    if (settings.grok_api_key) {
+                        document.getElementById('grok-token').value = settings.grok_api_key;
+                    }
+
+                    // Load video models and set selected model
+                    await loadVideoModels();
+                    const videoModel = settings.video_model || 'veo-2.0-generate-001';
+                    const videoSelect = document.getElementById('video-model-select');
+                    if (videoSelect) {
+                        videoSelect.value = videoModel;
+                    }
+
+                    settingsLoaded = true;
+                } else {
+                    console.warn('Failed to load settings, using defaults');
+                    // Set default to imagen-3.0-generate-001
+                    document.querySelector('input[name="model"][value="imagen-3.0-generate-001"]').checked = true;
+                    updateRadioStyles();
+                    settingsLoaded = true;
+                }
+            } catch (err) {
+                console.error('Error loading settings:', err);
+                showMessage('Failed to load settings', 'error');
+            }
+        }
+
+        async function saveSettings() {
+            const model = document.querySelector('input[name="model"]:checked')?.value;
+            const videoModel = document.getElementById('video-model-select')?.value;
+            const geminiToken = document.getElementById('gemini-token').value.trim();
+            const grokToken = document.getElementById('grok-token').value.trim();
+
+            if (!model) {
+                showMessage('Please select an image generation model', 'error');
+                return;
+            }
+
+            if (!videoModel) {
+                showMessage('Please select a video generation model', 'error');
+                return;
+            }
+
+            // Validate that Gemini token is provided for Imagen models
+            if (model.startsWith('imagen-') && !geminiToken) {
+                showMessage('Gemini API token is required for Imagen models', 'error');
+                return;
+            }
+
+            // Validate that Grok token is provided for Grok model
+            if (model.startsWith('grok-') && !grokToken) {
+                showMessage('Grok API token is required for Grok model', 'error');
+                return;
+            }
+
+            const settings = {
+                model: model,
+                video_model: videoModel
+            };
+
+            // Only include tokens if they are non-empty
+            if (geminiToken) {
+                settings.gemini_api_key = geminiToken;
+            }
+            if (grokToken) {
+                settings.grok_api_key = grokToken;
+            }
+
+            try {
+                const response = await fetch('/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(settings)
+                });
+
+                if (response.ok) {
+                    showMessage('Settings saved successfully!', 'success');
+                } else {
+                    const error = await response.text();
+                    showMessage(`Failed to save settings: ${error}`, 'error');
+                }
+            } catch (err) {
+                showMessage(`Error saving settings: ${err.message}`, 'error');
+            }
+        }
+
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+            messageEl.style.display = 'block';
+
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateRadioStyles() {
+            document.querySelectorAll('.radio-option').forEach(option => {
+                const radio = option.querySelector('input[type="radio"]');
+                if (radio.checked) {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
+        }
+
+        // Add event listeners to radio buttons
+        document.querySelectorAll('input[name="model"]').forEach(radio => {
+            radio.addEventListener('change', updateRadioStyles);
+        });
+
+        // Add click handler to radio option containers
+        document.querySelectorAll('.radio-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'INPUT') {
+                    const radio = option.querySelector('input[type="radio"]');
+                    radio.checked = true;
+                    updateRadioStyles();
+                }
+            });
+        });
+
+        // Initialize
+        loadSettings();
+    </script>
+</body>
+</html>

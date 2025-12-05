@@ -21,14 +21,14 @@ from triptic.server import (
 )
 
 
-def get_pid_file() -> Path:
-    """Get the path to the PID file."""
-    return Path.home() / ".triptic.pid"
+def get_pid_file(port: int = 3000) -> Path:
+    """Get the path to the PID file for a specific port."""
+    return Path.home() / f".triptic_{port}.pid"
 
 
-def read_pid() -> int | None:
-    """Read the PID from the PID file."""
-    pid_file = get_pid_file()
+def read_pid(port: int = 3000) -> int | None:
+    """Read the PID from the PID file for a specific port."""
+    pid_file = get_pid_file(port)
     if pid_file.exists():
         try:
             return int(pid_file.read_text().strip())
@@ -37,14 +37,14 @@ def read_pid() -> int | None:
     return None
 
 
-def write_pid(pid: int) -> None:
-    """Write the PID to the PID file."""
-    get_pid_file().write_text(str(pid))
+def write_pid(pid: int, port: int = 3000) -> None:
+    """Write the PID to the PID file for a specific port."""
+    get_pid_file(port).write_text(str(pid))
 
 
-def remove_pid() -> None:
-    """Remove the PID file."""
-    pid_file = get_pid_file()
+def remove_pid(port: int = 3000) -> None:
+    """Remove the PID file for a specific port."""
+    pid_file = get_pid_file(port)
     if pid_file.exists():
         pid_file.unlink()
 
@@ -101,25 +101,30 @@ def format_time_since(iso_timestamp: str) -> str:
 
 def cmd_start(args: argparse.Namespace) -> int:
     """Start the triptic server."""
-    # Check if already running
-    pid = read_pid()
-    if pid and is_process_running(pid):
-        print(f"[triptic] Server already running (PID: {pid})")
-        return 1
-
     port = args.port
     host = args.host
+
+    # Check if already running on this port
+    pid = read_pid(port)
+    if pid and is_process_running(pid):
+        print(f"[triptic] Server already running on port {port} (PID: {pid})")
+        return 1
+
+    # Set database path if provided
+    if hasattr(args, 'database') and args.database:
+        os.environ['TRIPTIC_DB_PATH'] = args.database
+        print(f"[triptic] Using database: {args.database}")
 
     if args.daemon:
         # Fork and run in background
         pid = os.fork()
         if pid > 0:
             # Parent process
-            write_pid(pid)
+            write_pid(pid, port)
             print(f"[triptic] Server started in background (PID: {pid})")
             print(f"[triptic] Listening at http://{host}:{port}")
             print(f"\n[triptic] URLs:")
-            print(f"  Dashboard:  http://{host}:{port}/dashboard.html")
+            print(f"  Wall:       http://{host}:{port}/wall.html")
             print(f"  Playlists:  http://{host}:{port}/playlists.html")
             print(f"  Left:       http://{host}:{port}/#left")
             print(f"  Center:     http://{host}:{port}/#center")
@@ -130,33 +135,34 @@ def cmd_start(args: argparse.Namespace) -> int:
             try:
                 run_server(port=port, host=host)
             finally:
-                remove_pid()
+                remove_pid(port)
             return 0
     else:
         # Run in foreground
-        write_pid(os.getpid())
+        write_pid(os.getpid(), port)
         try:
             run_server(port=port, host=host)
         finally:
-            remove_pid()
+            remove_pid(port)
         return 0
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
     """Stop the triptic server."""
-    pid = read_pid()
+    port = getattr(args, 'port', 3000)
+    pid = read_pid(port)
     if not pid:
-        print("[triptic] No server running (no PID file found)")
+        print(f"[triptic] No server running on port {port} (no PID file found)")
         return 1
 
     if not is_process_running(pid):
-        print(f"[triptic] Server not running (stale PID: {pid})")
-        remove_pid()
+        print(f"[triptic] Server not running on port {port} (stale PID: {pid})")
+        remove_pid(port)
         return 1
 
     try:
         os.kill(pid, signal.SIGTERM)
-        print(f"[triptic] Stopping server (PID: {pid})...")
+        print(f"[triptic] Stopping server on port {port} (PID: {pid})...")
 
         # Wait for process to stop
         for _ in range(50):  # 5 seconds max
@@ -168,30 +174,48 @@ def cmd_stop(args: argparse.Namespace) -> int:
             print("[triptic] Server did not stop gracefully, sending SIGKILL")
             os.kill(pid, signal.SIGKILL)
 
-        remove_pid()
-        print("[triptic] Server stopped")
+        remove_pid(port)
+        print(f"[triptic] Server on port {port} stopped")
         return 0
     except (OSError, ProcessLookupError) as e:
         print(f"[triptic] Error stopping server: {e}")
-        remove_pid()
+        remove_pid(port)
         return 1
 
 
-def cmd_imageset(args: argparse.Namespace) -> int:
-    """Manage image sets."""
-    if args.imageset_action == 'list':
-        prefix = args.prefix if hasattr(args, 'prefix') and args.prefix else None
-        imagesets = list_imagesets(prefix)
+def cmd_restart(args: argparse.Namespace) -> int:
+    """Restart the triptic server (stop if running, then start)."""
+    port = args.port
+    # Try to stop if running (ignore errors if not running)
+    pid = read_pid(port)
+    if pid and is_process_running(pid):
+        print(f"[triptic] Stopping running server on port {port}...")
+        cmd_stop(args)
+        time.sleep(1)  # Give it a moment to clean up
+    else:
+        print(f"[triptic] No server running on port {port}, starting fresh...")
+        # Clean up stale PID file if it exists
+        remove_pid(port)
 
-        if not imagesets:
+    # Now start the server
+    return cmd_start(args)
+
+
+def cmd_asset_group(args: argparse.Namespace) -> int:
+    """Manage asset groups."""
+    if args.asset_group_action == 'list':
+        prefix = args.prefix if hasattr(args, 'prefix') and args.prefix else None
+        asset_groups = list_imagesets(prefix)  # TODO: rename to list_asset_groups in server.py
+
+        if not asset_groups:
             if prefix:
-                print(f"[triptic] No image sets found with prefix '{prefix}'")
+                print(f"[triptic] No asset groups found with prefix '{prefix}'")
             else:
-                print("[triptic] No image sets found")
+                print("[triptic] No asset groups found")
             return 1
 
-        print(f"[triptic] Image sets{' with prefix ' + prefix if prefix else ''}:")
-        for name, files in imagesets:
+        print(f"[triptic] Asset groups{' with prefix ' + prefix if prefix else ''}:")
+        for name, files in asset_groups:
             left = files.get('left', 'N/A')
             center = files.get('center', 'N/A')
             right = files.get('right', 'N/A')
@@ -199,7 +223,7 @@ def cmd_imageset(args: argparse.Namespace) -> int:
             print(f"    ({left}, {center}, {right})")
         return 0
     else:
-        print(f"[triptic] Error: unknown imageset action '{args.imageset_action}'")
+        print(f"[triptic] Error: unknown asset group action '{args.asset_group_action}'")
         return 1
 
 
@@ -228,6 +252,11 @@ def cmd_playlist(args: argparse.Namespace) -> int:
 
 def cmd_imgen(args: argparse.Namespace) -> int:
     """Generate images for a playlist item."""
+    from triptic import db
+
+    # Initialize database if needed
+    db.init_database()
+
     name = args.name
     prompt = args.prompt
     playlist = args.playlist if hasattr(args, 'playlist') and args.playlist else None
@@ -236,21 +265,24 @@ def cmd_imgen(args: argparse.Namespace) -> int:
     content_dir = get_content_dir()
     img_dir = content_dir / "img"
 
+    # Gemini always generates PNG images
+    file_ext = ".png"
+
     if playlist:
-        # Save to playlist-specific directory (e.g., ~/.triptic/content/img/animals/name.{left,center,right}.svg)
+        # Save to playlist-specific directory (e.g., ~/.triptic/content/img/animals/name.{left,center,right}.png)
         output_dir = img_dir / playlist
         output_dir.mkdir(parents=True, exist_ok=True)
         output_paths = {
-            'left': output_dir / f"{name}.left.svg",
-            'center': output_dir / f"{name}.center.svg",
-            'right': output_dir / f"{name}.right.svg",
+            'left': output_dir / f"{name}.left{file_ext}",
+            'center': output_dir / f"{name}.center{file_ext}",
+            'right': output_dir / f"{name}.right{file_ext}",
         }
     else:
-        # Save to screen-specific directories (e.g., ~/.triptic/content/img/left/name.svg)
+        # Save to screen-specific directories (e.g., ~/.triptic/content/img/left/name.png)
         output_paths = {
-            'left': img_dir / "left" / f"{name}.svg",
-            'center': img_dir / "center" / f"{name}.svg",
-            'right': img_dir / "right" / f"{name}.svg",
+            'left': img_dir / "left" / f"{name}{file_ext}",
+            'center': img_dir / "center" / f"{name}{file_ext}",
+            'right': img_dir / "right" / f"{name}{file_ext}",
         }
         for screen_dir in [img_dir / "left", img_dir / "center", img_dir / "right"]:
             screen_dir.mkdir(parents=True, exist_ok=True)
@@ -270,40 +302,49 @@ def cmd_imgen(args: argparse.Namespace) -> int:
 
         # Add to playlist if specified
         if playlist:
-            imageset_name = f"{playlist}/{name}"
-            if add_to_playlist(playlist, imageset_name):
-                print(f"\n[triptic] Added '{imageset_name}' to playlist '{playlist}'")
+            asset_group_name = f"{playlist}/{name}"
+            if add_to_playlist(playlist, asset_group_name):
+                print(f"\n[triptic] Added '{asset_group_name}' to playlist '{playlist}'")
             else:
                 print(f"\n[triptic] Warning: Could not add to playlist '{playlist}' (playlist may not exist)")
 
-        # Generate dashboard URL
+        # Generate dashboard and editor URLs
         port = os.environ.get("PORT", "3000")
         host = os.environ.get("HOST", "localhost")
 
-        # Create a URL to view this specific triplet in the dashboard
-        # The dashboard will need to support ?preview=imageset_name parameter
+        # Create URLs for viewing and editing
         if playlist:
-            preview_url = f"http://{host}:{port}/dashboard.html?preview={playlist}/{name}"
+            asset_group_id = f"{playlist}/{name}"
+            preview_url = f"http://{host}:{port}/wall.html?preview={asset_group_id}"
+            editor_url = f"http://{host}:{port}/asset_group.html?id={asset_group_id}"
         else:
-            preview_url = f"http://{host}:{port}/dashboard.html"
+            preview_url = f"http://{host}:{port}/wall.html"
+            editor_url = f"http://{host}:{port}/asset_group.html?id={name}"
 
-        print(f"\n[triptic] View triplet: {preview_url}")
+        print(f"\n[triptic] View in wall: {preview_url}")
+        print(f"[triptic] Edit asset group:  {editor_url}")
 
         return 0
+    except RuntimeError as e:
+        print(f"\n[triptic] Error: {e}")
+        return 1
     except Exception as e:
-        print(f"[triptic] Error generating images: {e}")
+        print(f"\n[triptic] Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
         return 1
 
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Check server status."""
-    pid = read_pid()
+    port = getattr(args, 'port', 3000)
+    pid = read_pid(port)
     if not pid:
-        print("[triptic] Server is not running (no PID file)")
+        print(f"[triptic] Server is not running on port {port} (no PID file)")
         return 1
 
     if is_process_running(pid):
-        print(f"[triptic] Server is running (PID: {pid})")
+        print(f"[triptic] Server is running on port {port} (PID: {pid})")
 
         # Display screen sync status
         screens = read_screen_states()
@@ -322,8 +363,62 @@ def cmd_status(args: argparse.Namespace) -> int:
 
         return 0
     else:
-        print(f"[triptic] Server is not running (stale PID: {pid})")
-        remove_pid()
+        print(f"[triptic] Server is not running on port {port} (stale PID: {pid})")
+        remove_pid(port)
+        return 1
+
+
+def cmd_generate_defaults(args: argparse.Namespace) -> int:
+    """Generate default placeholder images for left, center, and right screens."""
+    from triptic import db, storage
+    from triptic.imgen import generate_svg_triplet
+
+    # Initialize database if needed
+    db.init_database()
+
+    content_dir = get_content_dir()
+    defaults_dir = content_dir / "defaults"
+    defaults_dir.mkdir(parents=True, exist_ok=True)
+
+    print("[triptic] Generating default placeholder images...")
+
+    # Create a visually interesting prompt for default frames
+    prompt = "Abstract modern art triptych with three connected panels. Vibrant colors, flowing shapes, geometric patterns creating a cohesive composition across left, center, and right screens. Portrait orientation (1080x1920)."
+
+    output_paths = {
+        'left': defaults_dir / "default_left.png",
+        'center': defaults_dir / "default_center.png",
+        'right': defaults_dir / "default_right.png",
+    }
+
+    try:
+        print(f"[triptic] Generating all three placeholder images...")
+
+        # Generate all three screens at once
+        result = generate_svg_triplet(
+            name="defaults",
+            prompt=prompt,
+            output_paths=output_paths
+        )
+
+        # Check which images were generated
+        for screen, output_path in output_paths.items():
+            if output_path.exists():
+                print(f"[triptic]   ✓ {screen}: {output_path}")
+            else:
+                print(f"[triptic]   ✗ {screen}: Failed to generate")
+
+        print(f"\n[triptic] Default placeholders generated successfully!")
+        print(f"[triptic] Location: {defaults_dir}")
+
+        return 0
+    except RuntimeError as e:
+        print(f"\n[triptic] Error: {e}")
+        return 1
+    except Exception as e:
+        print(f"\n[triptic] Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
         return 1
 
 
@@ -359,33 +454,75 @@ def main() -> int:
         action="store_true",
         help="Run as a background daemon",
     )
+    start_parser.add_argument(
+        "--database",
+        type=str,
+        help="Path to SQLite database file (default: ~/.triptic/triptic.db)",
+    )
     start_parser.set_defaults(func=cmd_start)
 
     # Stop command
     stop_parser = subparsers.add_parser("stop", help="Stop the triptic server")
+    stop_parser.add_argument(
+        "-p", "--port",
+        type=int,
+        default=int(os.environ.get("PORT", 3000)),
+        help="Port of the server to stop (default: 3000)",
+    )
     stop_parser.set_defaults(func=cmd_stop)
+
+    # Restart command
+    restart_parser = subparsers.add_parser("restart", help="Restart the triptic server")
+    restart_parser.add_argument(
+        "-p", "--port",
+        type=int,
+        default=int(os.environ.get("PORT", 3000)),
+        help="Port to listen on (default: 3000)",
+    )
+    restart_parser.add_argument(
+        "-H", "--host",
+        default="localhost",
+        help="Host to bind to (default: localhost)",
+    )
+    restart_parser.add_argument(
+        "-d", "--daemon",
+        action="store_true",
+        help="Run as a background daemon",
+    )
+    restart_parser.add_argument(
+        "--database",
+        type=str,
+        help="Path to SQLite database file (default: ~/.triptic/triptic.db)",
+    )
+    restart_parser.set_defaults(func=cmd_restart)
 
     # Status command
     status_parser = subparsers.add_parser("status", help="Check server status")
+    status_parser.add_argument(
+        "-p", "--port",
+        type=int,
+        default=int(os.environ.get("PORT", 3000)),
+        help="Port of the server to check (default: 3000)",
+    )
     status_parser.set_defaults(func=cmd_status)
 
-    # ImageSet command (with alias 'is')
-    imageset_parser = subparsers.add_parser(
-        "imageset",
-        aliases=["is"],
-        help="Manage image sets"
+    # Asset Group command (with alias 'ag')
+    asset_group_parser = subparsers.add_parser(
+        "asset-group",
+        aliases=["ag"],
+        help="Manage asset groups"
     )
-    imageset_parser.add_argument(
-        "imageset_action",
+    asset_group_parser.add_argument(
+        "asset_group_action",
         choices=["list"],
         help="Action to perform"
     )
-    imageset_parser.add_argument(
+    asset_group_parser.add_argument(
         "prefix",
         nargs="?",
-        help="Optional prefix to filter image sets (e.g., 'numbers/1')",
+        help="Optional prefix to filter asset groups (e.g., 'numbers/1')",
     )
-    imageset_parser.set_defaults(func=cmd_imageset)
+    asset_group_parser.set_defaults(func=cmd_asset_group)
 
     # Playlist command
     playlist_parser = subparsers.add_parser("playlist", help="Manage playlists")
@@ -416,6 +553,13 @@ def main() -> int:
         help="Playlist directory to save to (e.g., 'animals', 'numbers')",
     )
     imgen_parser.set_defaults(func=cmd_imgen)
+
+    # Generate Defaults command
+    generate_defaults_parser = subparsers.add_parser(
+        "generate-defaults",
+        help="Generate default placeholder images for left, center, and right screens"
+    )
+    generate_defaults_parser.set_defaults(func=cmd_generate_defaults)
 
     args = parser.parse_args()
 

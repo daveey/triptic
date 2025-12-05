@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Triptic - Playlists</title>
+    <link rel="stylesheet" href="/shared/nav.css">
     <style>
         * {
             margin: 0;
@@ -12,10 +13,11 @@
         }
 
         body {
-            background: #1a1a2e;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
             min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             color: #fff;
+            padding: 0;
         }
 
         .header {
@@ -106,6 +108,7 @@
             cursor: pointer;
             font-size: 14px;
             transition: background 0.2s;
+            margin-left: 10px;
         }
 
         .playlist-actions button:hover {
@@ -115,6 +118,27 @@
         .playlist-actions button.active {
             background: #e94560;
             border-color: #e94560;
+        }
+
+        .playlist-actions button.add-btn {
+            background: #16e0bd;
+            border-color: #16e0bd;
+            color: #0f0c29;
+            font-weight: bold;
+        }
+
+        .playlist-actions button.add-btn:hover {
+            background: #12b89a;
+        }
+
+        .playlist-actions button.delete-btn {
+            background: #8b0000;
+            border-color: #8b0000;
+        }
+
+        .playlist-actions button.delete-btn:hover {
+            background: #e74c3c;
+            border-color: #e74c3c;
         }
 
         .expand-toggle {
@@ -134,7 +158,7 @@
         .triplets {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 10px;
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.3s ease-out;
@@ -155,6 +179,35 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 4px;
+            cursor: move;
+            transition: all 0.2s;
+        }
+
+        .triplet.dragging {
+            opacity: 0.5;
+        }
+
+        .triplet.drag-over {
+            border-top: 3px solid #16e0bd;
+        }
+
+        .triplet:hover {
+            background: rgba(255,255,255,0.08);
+        }
+
+        .drag-handle {
+            color: #666;
+            cursor: move;
+            font-size: 18px;
+            padding: 0 5px;
+            user-select: none;
+        }
+
+        .drag-handle:hover {
+            color: #fff;
         }
 
         .triplet-number {
@@ -164,44 +217,65 @@
             text-align: right;
         }
 
+        .triplet-name {
+            flex: 1;
+            font-size: 14px;
+            color: #16e0bd;
+            font-weight: 500;
+        }
+
         .triplet-images {
             display: flex;
-            gap: 10px;
-            flex: 1;
+            gap: 5px;
         }
 
-        .triplet-screen {
-            flex: 1;
-            background: #0d0d0d;
-            border: 2px solid #333;
-            border-radius: 4px;
-            padding: 10px;
-            text-align: center;
-        }
-
-        .screen-label {
-            font-size: 10px;
-            text-transform: uppercase;
-            color: #666;
-            margin-bottom: 5px;
-        }
-
-        .screen-image {
-            max-width: 100%;
-            height: 150px;
-            object-fit: contain;
-            background: #000;
+        .triplet-thumbnail {
+            width: 40px;
+            height: 60px;
+            object-fit: cover;
             border-radius: 2px;
+            border: 1px solid #333;
         }
 
-        .screen-path {
-            font-size: 11px;
-            color: #888;
-            margin-top: 5px;
-            font-family: monospace;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+        .triplet-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .triplet-actions button {
+            background: none;
+            border: 1px solid #0f3460;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .triplet-actions button:hover {
+            background: #0f3460;
+        }
+
+        .triplet-actions button.edit-btn:hover {
+            background: #16e0bd;
+            border-color: #16e0bd;
+            color: #0f0c29;
+        }
+
+        .triplet-actions button.remove-btn:hover {
+            background: #e74c3c;
+            border-color: #e74c3c;
+        }
+
+        .triplet.dragging {
+            opacity: 0.5;
+            cursor: move;
+        }
+
+        .playlist.drag-over {
+            border-color: #16e0bd;
+            background: rgba(22, 224, 189, 0.1);
         }
 
         .loading {
@@ -210,28 +284,167 @@
             color: #666;
             font-size: 18px;
         }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            border: 2px solid #0f3460;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #16e0bd;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .modal-suggestions {
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .modal-suggestions.active {
+            display: block;
+        }
+
+        .suggestion-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .suggestion-item:hover {
+            background: rgba(22,224,189,0.2);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .modal-buttons .btn-primary {
+            background: #16e0bd;
+            color: #0f0c29;
+            font-weight: bold;
+        }
+
+        .modal-buttons .btn-primary:hover {
+            background: #12b89a;
+        }
+
+        .modal-buttons .btn-secondary {
+            background: #0f3460;
+            color: #fff;
+        }
+
+        .modal-buttons .btn-secondary:hover {
+            background: #1a4d7a;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .message.success {
+            background: rgba(22,224,189,0.2);
+            border: 1px solid #16e0bd;
+            color: #16e0bd;
+        }
+
+        .message.error {
+            background: rgba(231,76,60,0.2);
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+        }
+
+        .message.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Triptic Playlists</h1>
-        <p>Manage and preview your triptic playlists</p>
-    </div>
-
-    <div class="nav">
-        <a href="/dashboard.html">Dashboard</a>
-        <a href="/playlists.html" class="active">Playlists</a>
-    </div>
+    <script src="/shared/nav.js"></script>
 
     <div class="container">
+        <div style="margin-bottom: 20px; display: flex; justify-content: flex-end;">
+            <button class="btn-primary" onclick="createNewPlaylist()">+ New Playlist</button>
+        </div>
+        <div id="message" class="message"></div>
         <div id="playlists-container">
             <div class="loading">Loading playlists...</div>
+        </div>
+    </div>
+
+    <!-- Add Asset Group Modal -->
+    <div id="add-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Add Asset Group to Playlist</div>
+            <input type="text" id="modal-search" class="modal-input" placeholder="Type asset group name..." autocomplete="off">
+            <div id="modal-suggestions" class="modal-suggestions"></div>
+            <div id="modal-message" style="margin-bottom: 15px; color: #888; font-size: 14px;"></div>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeAddModal()">Cancel</button>
+                <button class="btn-primary" onclick="confirmAddAssetGroup()">Add</button>
+            </div>
         </div>
     </div>
 
     <script>
         let currentPlaylist = '';
         let allPlaylists = {};
+        let allAssetGroups = [];
+        let draggedElement = null;
+        let draggedPlaylist = null;
+        let addModalPlaylist = null;
 
         async function loadAllPlaylists() {
             try {
@@ -240,19 +453,27 @@
                 const playlistsData = await playlistsResponse.json();
                 currentPlaylist = playlistsData.current;
 
-                // Get all playlist items
-                const stateResponse = await fetch('/playlist');
-                const stateData = await stateResponse.json();
+                // Load all asset groups for typeahead
+                const assetGroupsResponse = await fetch('/asset-groups');
+                const assetGroupsData = await assetGroupsResponse.json();
 
-                // For now, we'll need to load each playlist's data
-                // Since we don't have an endpoint for that, we'll use what we have
-                allPlaylists = {
-                    [stateData.name]: stateData.items
-                };
+                // Get all asset group names
+                allAssetGroups = Object.keys(assetGroupsData.asset_groups || {});
+                console.log('[loadAllPlaylists] Loaded', allAssetGroups.length, 'asset groups');
 
-                // If we need all playlists, we'd need to add that endpoint
-                // For now, just show the current one prominently
-                displayPlaylists(playlistsData.playlists, currentPlaylist, allPlaylists);
+                // Load each playlist's items
+                const promises = playlistsData.playlists.map(async (name) => {
+                    const response = await fetch('/playlists/' + name);
+                    const data = await response.json();
+                    allPlaylists[name] = data.items;
+                });
+
+                await Promise.all(promises);
+
+                // Sort playlists alphabetically
+                const sortedPlaylists = playlistsData.playlists.sort((a, b) => a.localeCompare(b));
+
+                displayPlaylists(sortedPlaylists, currentPlaylist, allPlaylists);
             } catch (err) {
                 console.error('Failed to load playlists:', err);
                 document.getElementById('playlists-container').innerHTML =
@@ -280,6 +501,8 @@
                 const title = document.createElement('div');
                 title.className = 'playlist-title';
                 title.textContent = name;
+                title.style.cursor = 'pointer';
+                title.onclick = () => togglePlaylist(name);
                 titleContainer.appendChild(title);
 
                 if (name === current) {
@@ -289,28 +512,28 @@
                     titleContainer.appendChild(badge);
                 }
 
-                // Add expand/collapse button for non-active playlists
-                if (name !== current) {
-                    const expandBtn = document.createElement('button');
-                    expandBtn.className = 'expand-toggle';
-                    expandBtn.textContent = '▼';
-                    expandBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        togglePlaylist(name);
-                    };
-                    titleContainer.insertBefore(expandBtn, title);
-
-                    // Make title clickable too
-                    title.style.cursor = 'pointer';
-                    title.onclick = () => togglePlaylist(name);
-                } else {
-                    // Active playlist title is also clickable
-                    title.style.cursor = 'pointer';
-                    title.onclick = () => togglePlaylist(name);
-                }
-
                 const actions = document.createElement('div');
                 actions.className = 'playlist-actions';
+
+                // Add asset group button
+                const addButton = document.createElement('button');
+                addButton.className = 'add-btn';
+                addButton.textContent = '+ Add Asset Group';
+                addButton.onclick = () => openAddModal(name);
+                actions.appendChild(addButton);
+
+                // Rename button
+                const renameButton = document.createElement('button');
+                renameButton.textContent = 'Rename';
+                renameButton.onclick = () => renamePlaylist(name);
+                actions.appendChild(renameButton);
+
+                // Delete button
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'delete-btn';
+                deleteButton.textContent = 'Delete';
+                deleteButton.onclick = () => deletePlaylist(name);
+                actions.appendChild(deleteButton);
 
                 if (name !== current) {
                     const setButton = document.createElement('button');
@@ -331,119 +554,528 @@
 
                 // Create triplets container
                 const triplets = document.createElement('div');
-                triplets.className = 'triplets';
+                triplets.className = 'triplets expanded';
                 triplets.id = 'triplets-' + name;
 
-                // If we have data for this playlist, display it immediately
                 if (playlistData[name]) {
                     playlistData[name].forEach(function(item, index) {
-                        const triplet = createTriplet(index + 1, item);
+                        const triplet = createTriplet(index + 1, item, name);
                         triplets.appendChild(triplet);
                     });
-                    // Auto-expand active playlist
-                    if (name === current) {
-                        triplets.classList.add('expanded');
-                    }
                 }
 
                 playlist.appendChild(triplets);
+
+                // Make playlist droppable for cross-playlist dragging
+                playlist.dataset.playlistName = name;
+                playlist.addEventListener('dragover', handlePlaylistDragOver);
+                playlist.addEventListener('drop', handlePlaylistDrop);
+                playlist.addEventListener('dragleave', handlePlaylistDragLeave);
+
                 container.appendChild(playlist);
             });
         }
 
         async function togglePlaylist(name) {
             const triplets = document.getElementById('triplets-' + name);
-            const expandBtn = document.querySelector('#playlist-' + name + ' .expand-toggle');
-
-            if (triplets.classList.contains('expanded')) {
-                // Collapse
-                triplets.classList.remove('expanded');
-                if (expandBtn) expandBtn.textContent = '▼';
-            } else {
-                // Expand
-                if (expandBtn) expandBtn.textContent = '▲';
-                triplets.classList.add('expanded');
-
-                // Load data if not already loaded
-                if (triplets.children.length === 0) {
-                    triplets.innerHTML = '<div class="loading">Loading...</div>';
-                    try {
-                        const response = await fetch('/playlists/' + name);
-                        const data = await response.json();
-                        triplets.innerHTML = '';
-                        data.items.forEach(function(item, index) {
-                            const triplet = createTriplet(index + 1, item);
-                            triplets.appendChild(triplet);
-                        });
-                    } catch (err) {
-                        console.error('Failed to load playlist:', err);
-                        triplets.innerHTML = '<div class="loading">Failed to load</div>';
-                    }
-                }
-            }
+            triplets.classList.toggle('expanded');
         }
 
-        function createTriplet(number, item) {
+        function createTriplet(number, item, playlistName) {
             const triplet = document.createElement('div');
             triplet.className = 'triplet';
+            triplet.draggable = true;
+            triplet.dataset.assetGroup = item.name;
+            triplet.dataset.playlist = playlistName;
+
+            // Drag events
+            triplet.addEventListener('dragstart', handleDragStart);
+            triplet.addEventListener('dragend', handleDragEnd);
+            triplet.addEventListener('dragover', handleDragOver);
+            triplet.addEventListener('drop', handleDrop);
+            triplet.addEventListener('dragleave', handleDragLeave);
+
+            const dragHandle = document.createElement('div');
+            dragHandle.className = 'drag-handle';
+            dragHandle.textContent = '⋮⋮';
+            triplet.appendChild(dragHandle);
 
             const numberEl = document.createElement('div');
             numberEl.className = 'triplet-number';
             numberEl.textContent = number;
             triplet.appendChild(numberEl);
 
+            const nameEl = document.createElement('div');
+            nameEl.className = 'triplet-name';
+            nameEl.textContent = item.name;
+            triplet.appendChild(nameEl);
+
             const images = document.createElement('div');
             images.className = 'triplet-images';
 
             ['left', 'center', 'right'].forEach(function(screen) {
-                const screenDiv = document.createElement('div');
-                screenDiv.className = 'triplet-screen';
-
-                const label = document.createElement('div');
-                label.className = 'screen-label';
-                label.textContent = screen;
-                screenDiv.appendChild(label);
-
                 const img = document.createElement('img');
-                img.className = 'screen-image';
+                img.className = 'triplet-thumbnail';
                 img.src = item[screen] || '';
-                img.alt = screen + ' screen';
+                img.alt = screen;
                 img.onerror = function() {
                     this.style.display = 'none';
                 };
-                screenDiv.appendChild(img);
-
-                const path = document.createElement('div');
-                path.className = 'screen-path';
-                path.textContent = item[screen] || 'N/A';
-                path.title = item[screen] || '';
-                screenDiv.appendChild(path);
-
-                images.appendChild(screenDiv);
+                images.appendChild(img);
             });
 
             triplet.appendChild(images);
+
+            const actions = document.createElement('div');
+            actions.className = 'triplet-actions';
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-btn';
+            editBtn.textContent = 'Edit';
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                window.location.href = '/asset_group.html?id=' + encodeURIComponent(item.name);
+            };
+            actions.appendChild(editBtn);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-btn';
+            removeBtn.textContent = 'Remove';
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                removeFromPlaylist(playlistName, item.name);
+            };
+            actions.appendChild(removeBtn);
+
+            triplet.appendChild(actions);
             return triplet;
+        }
+
+        function handleDragStart(e) {
+            draggedElement = this;
+            draggedPlaylist = this.dataset.playlist;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.triplet').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(e) {
+            // Only allow drop in same playlist
+            if (this.dataset.playlist === draggedPlaylist) {
+                if (e.preventDefault) {
+                    e.preventDefault();
+                }
+                this.classList.add('drag-over');
+                e.dataTransfer.dropEffect = 'move';
+                return false;
+            }
+            // Don't prevent default for different playlists - let event bubble to playlist container
+            return true;
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        async function handleDrop(e) {
+            this.classList.remove('drag-over');
+
+            // Only handle drops within the same playlist
+            if (draggedElement !== this && this.dataset.playlist === draggedPlaylist) {
+                if (e.stopPropagation) {
+                    e.stopPropagation();
+                }
+                if (e.preventDefault) {
+                    e.preventDefault();
+                }
+
+                // Get all items in the playlist
+                const playlist = draggedPlaylist;
+                const container = document.getElementById('triplets-' + playlist);
+                const items = Array.from(container.querySelectorAll('.triplet'));
+
+                // Reorder
+                const draggedIndex = items.indexOf(draggedElement);
+                const targetIndex = items.indexOf(this);
+
+                if (draggedIndex < targetIndex) {
+                    container.insertBefore(draggedElement, this.nextSibling);
+                } else {
+                    container.insertBefore(draggedElement, this);
+                }
+
+                // Update order on server
+                await savePlaylistOrder(playlist);
+                return false;
+            }
+
+            // Don't stop propagation for cross-playlist drops - let event bubble to playlist container
+            return true;
+        }
+
+        function handlePlaylistDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+
+            // Allow dropping on different playlists
+            const targetPlaylist = this.dataset.playlistName;
+            if (targetPlaylist !== draggedPlaylist) {
+                this.classList.add('drag-over');
+                e.dataTransfer.dropEffect = 'move';
+            }
+
+            return false;
+        }
+
+        function handlePlaylistDragLeave(e) {
+            // Only remove class if we're actually leaving the playlist element
+            if (e.target === this) {
+                this.classList.remove('drag-over');
+            }
+        }
+
+        async function handlePlaylistDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+
+            this.classList.remove('drag-over');
+
+            const targetPlaylist = this.dataset.playlistName;
+            const sourcePlaylist = draggedPlaylist;
+            const assetGroupName = draggedElement.dataset.assetGroup;
+
+            // Only handle cross-playlist moves
+            if (targetPlaylist && targetPlaylist !== sourcePlaylist && assetGroupName) {
+                try {
+                    // Remove from source playlist
+                    const removeResponse = await fetch('/playlists/' + encodeURIComponent(sourcePlaylist) + '/remove', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ asset_group: assetGroupName })
+                    });
+
+                    if (!removeResponse.ok) {
+                        showMessage('Error removing from source playlist', 'error');
+                        return false;
+                    }
+
+                    // Add to target playlist
+                    const addResponse = await fetch('/asset-group/' + encodeURIComponent(assetGroupName) + '/add-to-playlists', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ playlists: [targetPlaylist] })
+                    });
+
+                    if (addResponse.ok) {
+                        showMessage(`Moved "${assetGroupName}" to "${targetPlaylist}"`, 'success');
+                        await loadAllPlaylists();
+                    } else {
+                        showMessage('Error adding to target playlist', 'error');
+                    }
+                } catch (error) {
+                    showMessage('Error moving asset group: ' + error.message, 'error');
+                }
+            }
+
+            return false;
+        }
+
+        async function savePlaylistOrder(playlistName) {
+            const container = document.getElementById('triplets-' + playlistName);
+            const items = Array.from(container.querySelectorAll('.triplet'));
+            const order = items.map(el => el.dataset.assetGroup);
+
+            try {
+                const response = await fetch('/playlists/' + playlistName + '/reorder', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ order: order })
+                });
+
+                if (response.ok) {
+                    // Update numbers
+                    items.forEach((el, i) => {
+                        el.querySelector('.triplet-number').textContent = i + 1;
+                    });
+                    showMessage('Playlist order saved', 'success');
+                } else {
+                    showMessage('Failed to save order', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to save order:', err);
+                showMessage('Failed to save order', 'error');
+            }
+        }
+
+        async function removeFromPlaylist(playlistName, assetGroupName) {
+            if (!confirm(`Remove "${assetGroupName}" from playlist "${playlistName}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/playlists/' + playlistName + '/remove', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ asset_group: assetGroupName })
+                });
+
+                if (response.ok) {
+                    await loadAllPlaylists();
+                    showMessage('Removed from playlist', 'success');
+                } else {
+                    showMessage('Failed to remove', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to remove:', err);
+                showMessage('Failed to remove', 'error');
+            }
         }
 
         async function setPlaylist(name) {
             try {
                 const response = await fetch('/playlist', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ name: name })
                 });
 
                 if (response.ok) {
                     location.reload();
                 } else {
-                    console.error('Failed to set playlist');
+                    showMessage('Failed to set playlist', 'error');
                 }
             } catch (err) {
                 console.error('Failed to set playlist:', err);
+                showMessage('Failed to set playlist', 'error');
             }
+        }
+
+        function openAddModal(playlistName) {
+            addModalPlaylist = playlistName;
+            document.getElementById('modal-search').value = '';
+            document.getElementById('modal-suggestions').innerHTML = '';
+            document.getElementById('modal-suggestions').classList.remove('active');
+            document.getElementById('modal-message').textContent = '';
+            document.getElementById('add-modal').classList.add('active');
+            document.getElementById('modal-search').focus();
+        }
+
+        function closeAddModal() {
+            document.getElementById('add-modal').classList.remove('active');
+            addModalPlaylist = null;
+        }
+
+        async function confirmAddAssetGroup() {
+            const search = document.getElementById('modal-search').value.trim();
+            if (!search) return;
+
+            // Check if asset group exists
+            const exists = allAssetGroups.includes(search);
+            const isNewAssetGroup = !exists;
+
+            if (!exists) {
+                // Create the asset group with auto-generated prompt
+                try {
+                    showMessage('Creating new asset group...', 'success');
+
+                    const createResponse = await fetch('/asset-group/create', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ id: search })
+                    });
+
+                    if (!createResponse.ok) {
+                        const errorText = await createResponse.text();
+                        showMessage('Error creating asset group: ' + errorText, 'error');
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Failed to create:', err);
+                    showMessage('Failed to create asset group: ' + err.message, 'error');
+                    return;
+                }
+            }
+
+            // Add to playlist
+            try {
+                const response = await fetch('/asset-group/' + encodeURIComponent(search) + '/add-to-playlists', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ playlists: [addModalPlaylist] })
+                });
+
+                if (response.ok) {
+                    closeAddModal();
+
+                    if (isNewAssetGroup) {
+                        // Navigate to new asset group for editing
+                        showMessage('Added to playlist. Redirecting...', 'success');
+                        setTimeout(() => {
+                            window.location.href = '/asset_group.html?id=' + encodeURIComponent(search);
+                        }, 500);
+                    } else {
+                        // Stay on playlist page and reload
+                        showMessage('Added to playlist', 'success');
+                        await loadAllPlaylists();
+                    }
+                } else {
+                    showMessage('Failed to add to playlist', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to add:', err);
+                showMessage('Failed to add to playlist', 'error');
+            }
+        }
+
+        // Modal search typeahead
+        document.getElementById('modal-search').addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            const suggestions = document.getElementById('modal-suggestions');
+
+            if (!query) {
+                suggestions.classList.remove('active');
+                return;
+            }
+
+            const filtered = allAssetGroups.filter(name => name.toLowerCase().includes(query)).slice(0, 10);
+
+            if (filtered.length === 0) {
+                suggestions.classList.remove('active');
+                return;
+            }
+
+            suggestions.innerHTML = filtered.map(name =>
+                `<div class="suggestion-item" onclick="selectAssetGroup('${name}')">${name}</div>`
+            ).join('');
+            suggestions.classList.add('active');
+        });
+
+        document.getElementById('modal-search').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                confirmAddAssetGroup();
+            } else if (e.key === 'Escape') {
+                closeAddModal();
+            }
+        });
+
+        function selectAssetGroup(name) {
+            document.getElementById('modal-search').value = name;
+            document.getElementById('modal-suggestions').classList.remove('active');
+            document.getElementById('modal-message').textContent = '';
+        }
+
+        // Close modal on background click
+        document.getElementById('add-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddModal();
+            }
+        });
+
+        async function createNewPlaylist() {
+            const name = prompt('Enter playlist name:');
+            if (!name || name.trim() === '') return;
+
+            const playlistName = name.trim();
+
+            // Validate name (letters, numbers, hyphens, underscores only)
+            if (!/^[a-zA-Z0-9_\-]+$/.test(playlistName)) {
+                showMessage('Playlist name can only contain letters, numbers, hyphens, and underscores', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/playlist/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name: playlistName })
+                });
+
+                if (response.ok) {
+                    showMessage('Playlist created successfully', 'success');
+                    await loadAllPlaylists();
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error creating playlist: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error creating playlist: ' + error.message, 'error');
+            }
+        }
+
+        async function renamePlaylist(oldName) {
+            const newName = prompt(`Rename playlist "${oldName}" to:`, oldName);
+            if (!newName || newName.trim() === '' || newName === oldName) return;
+
+            const playlistName = newName.trim();
+
+            // Validate name (letters, numbers, hyphens, underscores only)
+            if (!/^[a-zA-Z0-9_\-]+$/.test(playlistName)) {
+                showMessage('Playlist name can only contain letters, numbers, hyphens, and underscores', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/playlist/' + encodeURIComponent(oldName) + '/rename', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ new_name: playlistName })
+                });
+
+                if (response.ok) {
+                    showMessage('Playlist renamed successfully', 'success');
+                    await loadAllPlaylists();
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error renaming playlist: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error renaming playlist: ' + error.message, 'error');
+            }
+        }
+
+        async function deletePlaylist(playlistName) {
+            if (!confirm(`Are you sure you want to delete playlist "${playlistName}"? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/playlist/' + encodeURIComponent(playlistName), {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                if (response.ok) {
+                    showMessage('Playlist deleted successfully', 'success');
+                    await loadAllPlaylists();
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error deleting playlist: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error deleting playlist: ' + error.message, 'error');
+            }
+        }
+
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = 'message ' + type + ' active';
+
+            setTimeout(() => {
+                message.classList.remove('active');
+            }, 3000);
         }
 
         // Initialize

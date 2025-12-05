@@ -19,9 +19,8 @@
         #display {
             width: 100%;
             height: 100%;
-            background-size: cover;
-            background-position: center center;
-            background-repeat: no-repeat;
+            object-fit: cover;
+            object-position: center center;
         }
         #loading {
             position: absolute;
@@ -46,7 +45,7 @@
     </style>
 </head>
 <body>
-    <div id="display"></div>
+    <img id="display" alt="Display">
     <div id="loading">Loading...</div>
     <div id="error"></div>
 
@@ -151,8 +150,8 @@
 
             function setBackground(imgUrl) {
                 console.log('[DEBUG] setBackground called with URL:', imgUrl);
-                displayEl.style.backgroundImage = 'url(' + imgUrl + ')';
-                console.log('[DEBUG] Background image set to:', displayEl.style.backgroundImage);
+                displayEl.src = imgUrl;
+                console.log('[DEBUG] Image src set to:', displayEl.src);
             }
 
             let currentPlaylistName = null;
@@ -231,6 +230,35 @@
                 // Check for playlist changes every 5 seconds
                 setInterval(checkForPlaylistChanges, 5000);
             }
+
+            // Listen for messages from parent (wall.html) to jump to specific asset group
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'jumpToAssetGroup') {
+                    const targetAssetGroup = event.data.asset_group;
+                    console.log('[DEBUG] Received jumpToAssetGroup message:', targetAssetGroup);
+
+                    // Find the index of this asset group in our imageUrls array
+                    // The asset group name will be like "art/model", and we need to find
+                    // the matching URL in imageUrls
+                    let targetIndex = -1;
+                    for (let i = 0; i < imageUrls.length; i++) {
+                        // imageUrls contains paths like "/content/img/art/model.left.png?v=..."
+                        // Check if the URL contains the asset group path
+                        if (imageUrls[i].includes(targetAssetGroup)) {
+                            targetIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (targetIndex >= 0) {
+                        console.log('[DEBUG] Found asset group at index:', targetIndex);
+                        currentImageIndex = targetIndex;
+                        setBackground(imageUrls[targetIndex]);
+                    } else {
+                        console.warn('[DEBUG] Could not find asset group in imageUrls:', targetAssetGroup);
+                    }
+                }
+            });
 
             function onLoad() {
                 loadConfig();

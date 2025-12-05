@@ -33,10 +33,9 @@ class TestServer:
         """Test that public directory has required files."""
         public_dir = get_public_dir()
         assert (public_dir / "index.html").exists()
-        assert (public_dir / "test.html").exists()
-        assert (public_dir / "img" / "left" / "1.svg").exists()
-        assert (public_dir / "img" / "center" / "1.svg").exists()
-        assert (public_dir / "img" / "right" / "1.svg").exists()
+        assert (public_dir / "wall.html").exists()
+        assert (public_dir / "asset_group.html").exists()
+        assert (public_dir / "playlists.html").exists()
 
 
 class TestCLI:

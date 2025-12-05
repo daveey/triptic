@@ -1,0 +1,2218 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Triptic - Asset Group Editor</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/shared/nav.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .asset-group-name-container {
+            text-align: center;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .asset-group-name {
+            font-size: 1.5em;
+            color: #16e0bd;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            min-width: 200px;
+        }
+
+        .asset-group-name.editable {
+            background: rgba(22,224,189,0.1);
+            border: 1px solid #16e0bd;
+            outline: none;
+        }
+
+        .asset-group-name.editable:focus {
+            background: rgba(22,224,189,0.15);
+        }
+
+        .edit-name-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #0f3460;
+            color: #16e0bd;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .edit-name-btn:hover {
+            background: rgba(22,224,189,0.2);
+            border-color: #16e0bd;
+        }
+
+        .prompt-display {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #16e0bd;
+        }
+
+        .prompt-display h3 {
+            margin-bottom: 10px;
+            color: #16e0bd;
+        }
+
+        .prompt-display p {
+            margin: 5px 0;
+            line-height: 1.6;
+        }
+
+        .images-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .image-panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .image-panel h3 {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .prompt-editor {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .prompt-editor textarea {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #0f3460;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .prompt-editor textarea:focus {
+            outline: none;
+            border-color: #16e0bd;
+        }
+
+        .prompt-editor label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #16e0bd;
+        }
+
+        .editable-prompt {
+            cursor: text;
+            padding: 10px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .editable-prompt:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .editable-prompt[contenteditable="true"] {
+            background: rgba(22,224,189,0.1);
+            border: 1px solid #16e0bd;
+            outline: none;
+        }
+
+        .image-panel img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .version-picker {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .version-number {
+            width: 30px;
+            height: 30px;
+            display: none;  /* Hide by default, show only available versions */
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .version-number.available {
+            display: flex;  /* Show available versions */
+            color: #fff;
+            background: rgba(255,255,255,0.15);
+        }
+
+        .version-number.available:hover {
+            background: rgba(22,224,189,0.3);
+            transform: translateY(-2px);
+        }
+
+        .version-number.current {
+            background: #16e0bd;
+            color: #0f0c29;
+        }
+
+        .version-delete {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            background: rgba(231,76,60,0.2);
+            color: #e74c3c;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 16px;
+            font-weight: bold;
+            border: 1px solid rgba(231,76,60,0.3);
+        }
+
+        .version-delete:hover {
+            background: rgba(231,76,60,0.4);
+            transform: translateY(-2px);
+        }
+
+        .image-controls {
+            background: rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .button-row {
+            padding: 6px 10px;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .button-row:first-child {
+            padding-bottom: 3px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .button-row:last-child {
+            padding-top: 3px;
+        }
+
+        .button-row button {
+            padding: 8px 12px;
+            font-size: 13px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .image-controls input[type="file"] {
+            display: none;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            z-index: 10;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .controls {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 12px;
+            font-weight: bold;
+            color: #16e0bd;
+        }
+
+        .playlist-checkboxes {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .playlist-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .playlist-checkbox:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .playlist-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .playlist-checkbox label {
+            margin: 0;
+            font-weight: normal;
+            color: #fff;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .save-indicator {
+            display: none;
+            color: #16e0bd;
+            font-size: 14px;
+            padding: 5px 10px;
+            background: rgba(22,224,189,0.2);
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+
+        .save-indicator.active {
+            display: inline-block;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: #16e0bd;
+            color: #0f0c29;
+        }
+
+        .btn-primary:hover {
+            background: #12b89a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(22,224,189,0.4);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(231,76,60,0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .message.success {
+            background: rgba(22,224,189,0.2);
+            border: 1px solid #16e0bd;
+            color: #16e0bd;
+        }
+
+        .message.error {
+            background: rgba(231,76,60,0.2);
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            border: 2px solid #0f3460;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #16e0bd;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            font-family: inherit;
+        }
+
+        .modal-input:focus {
+            outline: none;
+            border-color: #16e0bd;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-buttons button {
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .images-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <script src="/shared/nav.js"></script>
+    <div class="container">
+        <div class="asset-group-name-container">
+            <div class="asset-group-name" id="asset-group-name" contenteditable="false"></div>
+            <button class="edit-name-btn" id="edit-name-btn" onclick="startEditName()">Edit</button>
+            <button class="edit-name-btn" id="save-name-btn" onclick="saveAssetGroupName()" style="display: none;">Save</button>
+            <button class="edit-name-btn" id="cancel-name-btn" onclick="cancelEditName()" style="display: none;">Cancel</button>
+        </div>
+
+        <div id="prompt-container" style="display: none;" class="prompt-display">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0;">Prompts</h3>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-secondary btn-small" onclick="toggleStyle()" id="style-toggle-btn">Edit Style</button>
+                    <button class="btn-primary btn-small" onclick="regenerateAll()">Regenerate All</button>
+                </div>
+            </div>
+
+            <div id="style-editor" style="display: none; margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #16e0bd; margin: 0;">Global Style (appended to all prompts):</label>
+                    <button class="btn-secondary btn-small" onclick="fluffPrompt('style')" style="padding: 4px 12px; font-size: 11px;">✨ Fluff</button>
+                </div>
+                <textarea id="prompt-style"
+                          style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #0f3460; color: #fff; padding: 8px; border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 100px;"
+                          placeholder="e.g., Create a photorealistic image with dramatic lighting..."></textarea>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <label style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #16e0bd; margin: 0;">Main Prompt:</label>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-secondary btn-small" onclick="fluffPrompt('main')" style="padding: 4px 12px; font-size: 11px;">✨ Fluff</button>
+                    <button class="btn-secondary btn-small" onclick="fluffPlusPrompt()" style="padding: 4px 12px; font-size: 11px;">Diff</button>
+                </div>
+            </div>
+            <div class="editable-prompt" id="prompt-main" contenteditable="true">
+            </div>
+        </div>
+
+        <div class="images-container">
+            <div class="image-panel" id="panel-left" draggable="true" data-screen="left">
+                <h3>Left</h3>
+                <img id="img-left" alt="Left panel">
+                <div class="version-picker" id="version-picker-left">
+                    <div class="version-number" data-version="1">1</div>
+                    <div class="version-number" data-version="2">2</div>
+                    <div class="version-number" data-version="3">3</div>
+                    <div class="version-number" data-version="4">4</div>
+                    <div class="version-number" data-version="5">5</div>
+                    <div class="version-number" data-version="6">6</div>
+                    <div class="version-number" data-version="7">7</div>
+                    <div class="version-number" data-version="8">8</div>
+                    <div class="version-number" data-version="9">9</div>
+                    <div class="version-delete" onclick="deleteVersion('left')" title="Delete current version">✕</div>
+                </div>
+                <div class="prompt-editor" id="prompt-editor-left" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <label style="margin: 0;">Left Prompt:</label>
+                        <div style="display: flex; gap: 4px;">
+                            <button class="btn-secondary btn-small" onclick="fluffPrompt('left')" style="padding: 2px 8px; font-size: 10px;">✨ Fluff</button>
+                            <button class="btn-secondary btn-small" onclick="diffSinglePrompt('left')" style="padding: 2px 8px; font-size: 10px;">Diff</button>
+                        </div>
+                    </div>
+                    <textarea id="prompt-left" placeholder="Screen-specific prompt..."
+                              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();regenerateImage('left');}"></textarea>
+                </div>
+                <div class="image-controls" id="controls-left" style="display: none;">
+                    <div class="button-row">
+                        <button class="btn-primary btn-small" onclick="regenerateImage('left')" title="Regenerate">Regen</button>
+                        <button class="btn-primary btn-small" onclick="regenerateWithContext('left')" title="Regenerate with context from other images">Regen+</button>
+                        <button class="btn-secondary btn-small" onclick="openEditModal('left')" title="Generate new image using current as reference">Morph</button>
+                    </div>
+                    <div class="button-row">
+                        <button class="btn-secondary btn-small" onclick="flipImage('left')" title="Flip horizontally">Flip</button>
+                        <button class="btn-secondary btn-small" onclick="document.getElementById('upload-left').click()" title="Upload image">Upload</button>
+                        <button class="btn-secondary btn-small" onclick="generateVideo('left')" title="Generate video from image">🎬 Video</button>
+                    </div>
+                    <input type="file" id="upload-left" accept="image/*" onchange="uploadImage('left', this.files[0])">
+                </div>
+                <video id="video-left" controls loop autoplay muted style="display: none; width: 100%; max-width: 100%;"></video>
+                <div class="loading-overlay" id="loading-left">Loading...</div>
+            </div>
+            <div class="image-panel" id="panel-center" draggable="true" data-screen="center">
+                <h3>Center</h3>
+                <img id="img-center" alt="Center panel">
+                <div class="version-picker" id="version-picker-center">
+                    <div class="version-number" data-version="1">1</div>
+                    <div class="version-number" data-version="2">2</div>
+                    <div class="version-number" data-version="3">3</div>
+                    <div class="version-number" data-version="4">4</div>
+                    <div class="version-number" data-version="5">5</div>
+                    <div class="version-number" data-version="6">6</div>
+                    <div class="version-number" data-version="7">7</div>
+                    <div class="version-number" data-version="8">8</div>
+                    <div class="version-number" data-version="9">9</div>
+                    <div class="version-delete" onclick="deleteVersion('center')" title="Delete current version">✕</div>
+                </div>
+                <div class="prompt-editor" id="prompt-editor-center" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <label style="margin: 0;">Center Prompt:</label>
+                        <div style="display: flex; gap: 4px;">
+                            <button class="btn-secondary btn-small" onclick="fluffPrompt('center')" style="padding: 2px 8px; font-size: 10px;">✨ Fluff</button>
+                            <button class="btn-secondary btn-small" onclick="diffSinglePrompt('center')" style="padding: 2px 8px; font-size: 10px;">Diff</button>
+                        </div>
+                    </div>
+                    <textarea id="prompt-center" placeholder="Screen-specific prompt..."
+                              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();regenerateImage('center');}"></textarea>
+                </div>
+                <div class="image-controls" id="controls-center" style="display: none;">
+                    <div class="button-row">
+                        <button class="btn-primary btn-small" onclick="regenerateImage('center')" title="Regenerate">Regen</button>
+                        <button class="btn-primary btn-small" onclick="regenerateWithContext('center')" title="Regenerate with context from other images">Regen+</button>
+                        <button class="btn-secondary btn-small" onclick="openEditModal('center')" title="Generate new image using current as reference">Morph</button>
+                    </div>
+                    <div class="button-row">
+                        <button class="btn-secondary btn-small" onclick="flipImage('center')" title="Flip horizontally">Flip</button>
+                        <button class="btn-secondary btn-small" onclick="document.getElementById('upload-center').click()" title="Upload image">Upload</button>
+                        <button class="btn-secondary btn-small" onclick="generateVideo('center')" title="Generate video from image">🎬 Video</button>
+                    </div>
+                    <input type="file" id="upload-center" accept="image/*" onchange="uploadImage('center', this.files[0])">
+                </div>
+                <video id="video-center" controls loop autoplay muted style="display: none; width: 100%; max-width: 100%;"></video>
+                <div class="loading-overlay" id="loading-center">Loading...</div>
+            </div>
+            <div class="image-panel" id="panel-right" draggable="true" data-screen="right">
+                <h3>Right</h3>
+                <img id="img-right" alt="Right panel">
+                <div class="version-picker" id="version-picker-right">
+                    <div class="version-number" data-version="1">1</div>
+                    <div class="version-number" data-version="2">2</div>
+                    <div class="version-number" data-version="3">3</div>
+                    <div class="version-number" data-version="4">4</div>
+                    <div class="version-number" data-version="5">5</div>
+                    <div class="version-number" data-version="6">6</div>
+                    <div class="version-number" data-version="7">7</div>
+                    <div class="version-number" data-version="8">8</div>
+                    <div class="version-number" data-version="9">9</div>
+                    <div class="version-delete" onclick="deleteVersion('right')" title="Delete current version">✕</div>
+                </div>
+                <div class="prompt-editor" id="prompt-editor-right" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <label style="margin: 0;">Right Prompt:</label>
+                        <div style="display: flex; gap: 4px;">
+                            <button class="btn-secondary btn-small" onclick="fluffPrompt('right')" style="padding: 2px 8px; font-size: 10px;">✨ Fluff</button>
+                            <button class="btn-secondary btn-small" onclick="diffSinglePrompt('right')" style="padding: 2px 8px; font-size: 10px;">Diff</button>
+                        </div>
+                    </div>
+                    <textarea id="prompt-right" placeholder="Screen-specific prompt..."
+                              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();regenerateImage('right');}"></textarea>
+                </div>
+                <div class="image-controls" id="controls-right" style="display: none;">
+                    <div class="button-row">
+                        <button class="btn-primary btn-small" onclick="regenerateImage('right')" title="Regenerate">Regen</button>
+                        <button class="btn-primary btn-small" onclick="regenerateWithContext('right')" title="Regenerate with context from other images">Regen+</button>
+                        <button class="btn-secondary btn-small" onclick="openEditModal('right')" title="Generate new image using current as reference">Morph</button>
+                    </div>
+                    <div class="button-row">
+                        <button class="btn-secondary btn-small" onclick="flipImage('right')" title="Flip horizontally">Flip</button>
+                        <button class="btn-secondary btn-small" onclick="document.getElementById('upload-right').click()" title="Upload image">Upload</button>
+                        <button class="btn-secondary btn-small" onclick="generateVideo('right')" title="Generate video from image">🎬 Video</button>
+                    </div>
+                    <input type="file" id="upload-right" accept="image/*" onchange="uploadImage('right', this.files[0])">
+                </div>
+                <video id="video-right" controls loop autoplay muted style="display: none; width: 100%; max-width: 100%;"></video>
+                <div class="loading-overlay" id="loading-right">Loading...</div>
+            </div>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>
+                    Playlists:
+                    <span class="save-indicator" id="save-indicator">✓ Saved</span>
+                </label>
+                <div class="playlist-checkboxes" id="playlist-checkboxes"></div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-secondary" onclick="duplicateAssetGroup()">Duplicate</button>
+                <button class="btn-danger" onclick="deleteAssetGroup()">Delete Asset Group</button>
+                <button class="btn-secondary" onclick="window.location.href='/dashboard.html'">Back to Dashboard</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Image Modal -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Morph Image</div>
+            <p style="color: #888; font-size: 14px; margin-bottom: 15px;">
+                Describe how to transform the <span id="edit-screen-name"></span> image:
+            </p>
+            <textarea id="edit-prompt-input" class="modal-input" style="min-height: 100px; resize: vertical;"
+                      placeholder="e.g., A sunset version of this scene, Same subject but at night, This scene in watercolor style..."></textarea>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn-primary" onclick="confirmEditImage()">Morph</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let assetGroupName = '';
+        let allPlaylists = [];
+        let playlistsWithAssetGroup = new Set();
+        let promptData = {
+            style: '',
+            main: '',
+            left: '',
+            center: '',
+            right: ''
+        };
+        async function init() {
+            // Get asset group name from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            assetGroupName = urlParams.get('id');
+
+            if (!assetGroupName) {
+                showMessage('No asset group specified', 'error');
+                return;
+            }
+
+            document.getElementById('asset-group-name').textContent = assetGroupName;
+
+            // Load asset group details
+            loadAssetGroup();
+
+            // Load available versions
+            await loadVersions();
+
+            // Load available playlists and check which contain this asset group
+            await loadPlaylists();
+            await loadAssetGroupPlaylists();
+            renderPlaylistCheckboxes();
+
+            // Setup drag-and-drop for swapping images
+            setupDragAndDrop();
+
+            // Load available versions for each screen
+            await loadVersions();
+        }
+
+        async function loadAssetGroup(skipAutoGenerate = false) {
+            try {
+                // Fetch asset group info from API (includes image URLs for current versions)
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}`);
+
+                // Handle 404 - asset group doesn't exist yet
+                if (response.status === 404) {
+                    if (!skipAutoGenerate) {
+                        showPlaceholderImages();
+                        showMessage(`Asset group "${assetGroupName}" doesn't exist. Click "Regenerate All" to create images.`, 'info');
+                        // Show the controls and prompt container so user can generate
+                        document.getElementById('prompt-container').style.display = 'block';
+                        ['left', 'center', 'right'].forEach(screen => {
+                            document.getElementById(`prompt-editor-${screen}`).style.display = 'block';
+                            document.getElementById(`controls-${screen}`).style.display = 'flex';
+                        });
+                    }
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`Failed to load asset group: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // Load images using URLs from API (respects current version)
+                const timestamp = Date.now();
+                if (data.left && data.left.image_url) {
+                    const imgEl = document.getElementById('img-left');
+                    imgEl.src = `${data.left.image_url}?t=${timestamp}`;
+                    if (data.left.local_path) {
+                        imgEl.title = data.left.local_path;
+                    }
+                }
+                if (data.center && data.center.image_url) {
+                    const imgEl = document.getElementById('img-center');
+                    imgEl.src = `${data.center.image_url}?t=${timestamp}`;
+                    if (data.center.local_path) {
+                        imgEl.title = data.center.local_path;
+                    }
+                }
+                if (data.right && data.right.image_url) {
+                    const imgEl = document.getElementById('img-right');
+                    imgEl.src = `${data.right.image_url}?t=${timestamp}`;
+                    if (data.right.local_path) {
+                        imgEl.title = data.right.local_path;
+                    }
+                }
+
+                // Check if all screens have 0 versions (new empty asset group that exists but has no images)
+                const hasNoVersions = (!data.left?.versions || data.left.versions.length === 0) &&
+                                     (!data.center?.versions || data.center.versions.length === 0) &&
+                                     (!data.right?.versions || data.right.versions.length === 0);
+
+                if (hasNoVersions && !skipAutoGenerate) {
+                    // Show placeholder images
+                    showPlaceholderImages();
+                    showMessage(`Asset group "${assetGroupName}" has no images. Click "Regenerate All" to create images.`, 'info');
+                    // Show the controls and prompt container so user can generate
+                    document.getElementById('prompt-container').style.display = 'block';
+                    ['left', 'center', 'right'].forEach(screen => {
+                        document.getElementById(`prompt-editor-${screen}`).style.display = 'block';
+                        document.getElementById(`controls-${screen}`).style.display = 'flex';
+                    });
+                } else {
+                    // Try to load prompt file
+                    const baseUrl = window.location.origin + '/img/';
+                    loadPrompt(`${baseUrl}left/${assetGroupName}.prompt.txt`);
+                }
+
+            } catch (error) {
+                showMessage('Error loading asset group: ' + error.message, 'error');
+            }
+        }
+
+        function showPlaceholderImages() {
+            // Load pre-generated default placeholder images
+            const timestamp = Date.now();
+            document.getElementById('img-left').src = `/defaults/default_left.png?t=${timestamp}`;
+            document.getElementById('img-center').src = `/defaults/default_center.png?t=${timestamp}`;
+            document.getElementById('img-right').src = `/defaults/default_right.png?t=${timestamp}`;
+
+            // Set default prompt
+            document.getElementById('prompt-main').textContent = assetGroupName;
+            promptData.main = assetGroupName;
+        }
+
+        async function generateDefaults() {
+            try {
+                showMessage('Generating placeholder images with Gemini...', 'info');
+
+                // Show loading overlays
+                ['left', 'center', 'right'].forEach(screen => {
+                    document.getElementById(`loading-${screen}`).classList.add('active');
+                });
+
+                // Create a visually interesting prompt based on the asset group name
+                const defaultPrompt = `A triptych art piece representing "${assetGroupName}". Create three connected panels (left, center, right) that work together as a cohesive artistic composition. Modern, vibrant, abstract style with rich colors and interesting visual elements.`;
+
+                // Generate images for all three screens
+                const screens = ['left', 'center', 'right'];
+
+                // Generate sequentially to avoid overwhelming the API
+                for (const screen of screens) {
+                    try {
+                        const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate/${screen}`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ prompt: defaultPrompt })
+                        });
+
+                        if (response.ok) {
+                            showMessage(`Generated ${screen} placeholder...`, 'info');
+                        } else {
+                            const errorText = await response.text();
+                            console.error(`Failed to generate ${screen}:`, errorText);
+                        }
+                    } catch (error) {
+                        console.error(`Error generating ${screen}:`, error);
+                    }
+                }
+
+                showMessage('Placeholder images generated successfully!', 'success');
+
+                // Reload the asset group to show new images (skip auto-generate to avoid recursion)
+                await loadAssetGroup(true);
+                await loadVersions();
+
+            } catch (error) {
+                showMessage('Error generating placeholders: ' + error.message, 'error');
+            } finally {
+                // Hide loading overlays
+                ['left', 'center', 'right'].forEach(screen => {
+                    document.getElementById(`loading-${screen}`).classList.remove('active');
+                });
+            }
+        }
+
+        async function loadPrompt(promptUrl) {
+            try {
+                const response = await fetch(promptUrl);
+                if (response.ok) {
+                    const text = await response.text();
+                    const lines = text.split('\n');
+
+                    // Parse the prompt file
+                    for (let line of lines) {
+                        if (line.startsWith('Style:')) {
+                            promptData.style = line.replace('Style:', '').trim();
+                        } else if (line.startsWith('Main prompt:')) {
+                            promptData.main = line.replace('Main prompt:', '').trim();
+                        } else if (line.startsWith('Left:')) {
+                            promptData.left = line.replace('Left:', '').trim();
+                        } else if (line.startsWith('Center:')) {
+                            promptData.center = line.replace('Center:', '').trim();
+                        } else if (line.startsWith('Right:')) {
+                            promptData.right = line.replace('Right:', '').trim();
+                        }
+                    }
+
+                    if (promptData.main) {
+                        document.getElementById('prompt-main').textContent = promptData.main;
+                        if (promptData.style) {
+                            document.getElementById('prompt-style').value = promptData.style;
+                        }
+                        document.getElementById('prompt-container').style.display = 'block';
+
+                        // Show screen-specific prompts
+                        ['left', 'center', 'right'].forEach(screen => {
+                            if (promptData[screen]) {
+                                document.getElementById(`prompt-${screen}`).value = promptData[screen];
+                                console.log(`Loaded ${screen} prompt from file:`, promptData[screen].substring(0, 50));
+                            } else {
+                                // Generate default screen prompt from main prompt with style appended
+                                const style = promptData.style ? ' ' + promptData.style : '';
+                                promptData[screen] = promptData.main + style;
+                                document.getElementById(`prompt-${screen}`).value = promptData[screen];
+                                console.log(`Generated default ${screen} prompt:`, promptData[screen].substring(0, 50));
+                            }
+                            document.getElementById(`prompt-editor-${screen}`).style.display = 'block';
+                        });
+                    }
+                }
+            } catch (error) {
+                // Prompt file doesn't exist, that's okay
+                console.log('No prompt file found');
+            }
+        }
+
+        async function loadVersions() {
+            // Load available versions for each screen
+            const screens = ['left', 'center', 'right'];
+            for (const screen of screens) {
+                await loadScreenVersions(screen);
+            }
+        }
+
+        async function loadScreenVersions(screen) {
+            try {
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/versions/${screen}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const { versions, current } = data;
+
+                    // Update the version picker UI
+                    const picker = document.getElementById(`version-picker-${screen}`);
+                    const versionElements = picker.querySelectorAll('.version-number');
+
+                    // If current version isn't in versions array, fall back to lowest available (version 1)
+                    let actualCurrent = current;
+                    if (!versions.includes(current)) {
+                        // Prefer version 1 if it exists, otherwise use lowest available
+                        if (versions.includes(1)) {
+                            actualCurrent = 1;
+                        } else if (versions.length > 0) {
+                            actualCurrent = Math.min(...versions);
+                        } else {
+                            actualCurrent = null;  // No versions available
+                        }
+                    }
+
+                    versionElements.forEach(element => {
+                        const version = parseInt(element.dataset.version);
+                        if (versions.includes(version)) {
+                            element.classList.add('available');
+                            // Mark the current version (may be fallback if DB version doesn't exist)
+                            if (version === actualCurrent) {
+                                element.classList.add('current');
+                            } else {
+                                element.classList.remove('current');
+                            }
+                            // Add click handler to ALL available versions (including current)
+                            element.onclick = () => restoreVersion(screen, version);
+                        } else {
+                            element.classList.remove('available', 'current');
+                            element.onclick = null;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error(`Error loading versions for ${screen}:`, error);
+            }
+        }
+
+        async function restoreVersion(screen, version) {
+            const loadingOverlay = document.getElementById(`loading-${screen}`);
+            loadingOverlay.classList.add('active');
+
+            try {
+                showMessage(`Restoring version ${version} for ${screen}...`, 'success');
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/version/${screen}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ version: version })
+                });
+
+                if (response.ok) {
+                    // Reload the entire asset group to get new image URLs
+                    await loadAssetGroup();
+
+                    // Reload versions to update the UI highlighting
+                    await loadScreenVersions(screen);
+
+                    showMessage(`Switched to version ${version} for ${screen}`, 'success');
+                } else {
+                    const errorData = await response.json();
+                    showMessage(`Error restoring version: ${errorData.message}`, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        async function deleteVersion(screen) {
+            const loadingOverlay = document.getElementById(`loading-${screen}`);
+            loadingOverlay.classList.add('active');
+
+            try {
+                showMessage(`Deleting current version for ${screen}...`, 'success');
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/delete-version/${screen}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                if (response.ok) {
+                    // Reload the entire asset group to get new image URLs
+                    await loadAssetGroup();
+
+                    // Reload versions to update the UI
+                    await loadScreenVersions(screen);
+
+                    showMessage(`Deleted version for ${screen}`, 'success');
+                } else {
+                    // Try to parse as JSON, fall back to status text if it fails
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.message || errorMessage;
+                    } catch (parseError) {
+                        // Response wasn't JSON (might be HTML error page)
+                        console.error('[deleteVersion] Failed to parse error response as JSON');
+                    }
+                    showMessage(`Error deleting version: ${errorMessage}`, 'error');
+                }
+            } catch (error) {
+                console.error('[deleteVersion] Exception:', error);
+                showMessage('Error: ' + error.message, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        async function loadPlaylists() {
+            try {
+                const response = await fetch('/playlists');
+                const data = await response.json();
+                allPlaylists = data.playlists || [];
+            } catch (error) {
+                console.error('Error loading playlists:', error);
+            }
+        }
+
+        async function loadAssetGroupPlaylists() {
+            // Check each playlist to see if it contains this asset group
+            playlistsWithAssetGroup.clear();
+            for (const playlistName of allPlaylists) {
+                try {
+                    const response = await fetch(`/playlists/${encodeURIComponent(playlistName)}`);
+                    const data = await response.json();
+                    if (data.items && data.items.length > 0) {
+                        // Check if any item matches this asset group
+                        const hasAssetGroup = data.items.some(item => {
+                            // Extract asset group name from path
+                            if (item.left) {
+                                const match = item.left.match(/img\/(.+)\.(left|center|right)\./);
+                                if (match && match[1] === assetGroupName) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        });
+                        if (hasAssetGroup) {
+                            playlistsWithAssetGroup.add(playlistName);
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error checking playlist ${playlistName}:`, error);
+                }
+            }
+        }
+
+        function renderPlaylistCheckboxes() {
+            const container = document.getElementById('playlist-checkboxes');
+            container.innerHTML = allPlaylists.map(playlistName => {
+                const isChecked = playlistsWithAssetGroup.has(playlistName);
+                return `
+                    <div class="playlist-checkbox">
+                        <input type="checkbox" id="playlist-${playlistName}"
+                               ${isChecked ? 'checked' : ''}
+                               onchange="togglePlaylist('${playlistName}', this.checked)">
+                        <label for="playlist-${playlistName}">${playlistName}</label>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function togglePlaylist(playlistName, isChecked) {
+            const indicator = document.getElementById('save-indicator');
+
+            try {
+                if (isChecked) {
+                    // Add to playlist
+                    const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/add-to-playlists`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ playlists: [playlistName] })
+                    });
+
+                    if (response.ok) {
+                        playlistsWithAssetGroup.add(playlistName);
+                        showSaveIndicator();
+                    } else {
+                        // Revert checkbox on error
+                        document.getElementById(`playlist-${playlistName}`).checked = false;
+                        showMessage('Error adding to playlist', 'error');
+                    }
+                } else {
+                    // Remove from playlist
+                    const response = await fetch(`/playlists/${encodeURIComponent(playlistName)}/remove`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ asset_group: assetGroupName })
+                    });
+
+                    if (response.ok) {
+                        playlistsWithAssetGroup.delete(playlistName);
+                        showSaveIndicator();
+                    } else {
+                        // Revert checkbox on error
+                        document.getElementById(`playlist-${playlistName}`).checked = true;
+                        showMessage('Error removing from playlist', 'error');
+                    }
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+                // Revert checkbox on error
+                document.getElementById(`playlist-${playlistName}`).checked = !isChecked;
+            }
+        }
+
+        function showSaveIndicator() {
+            const indicator = document.getElementById('save-indicator');
+            indicator.classList.add('active');
+            setTimeout(() => {
+                indicator.classList.remove('active');
+            }, 2000);
+        }
+
+        async function duplicateAssetGroup() {
+            const newName = prompt(`Enter name for duplicated asset group:`, assetGroupName + '-copy');
+            if (!newName || newName.trim() === '') {
+                return;
+            }
+
+            // Validate name
+            if (!/^[a-zA-Z0-9_\-\/]+$/.test(newName)) {
+                showMessage('Asset group name can only contain letters, numbers, hyphens, underscores, and slashes', 'error');
+                return;
+            }
+
+            try {
+                showMessage('Duplicating asset group...', 'success');
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/duplicate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ newName: newName.trim() })
+                });
+
+                if (response.ok) {
+                    showMessage('Asset group duplicated successfully. Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/asset_group.html?id=' + encodeURIComponent(newName.trim());
+                    }, 1000);
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error duplicating asset group: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteAssetGroup() {
+            if (!confirm(`Are you sure you want to delete asset group "${assetGroupName}"? This cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showMessage('Asset group deleted successfully', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard.html';
+                    }, 1500);
+                } else {
+                    showMessage('Error deleting asset group', 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function fluffPrompt(screen) {
+            // Get the current prompt text
+            let promptText;
+            let promptElement;
+
+            if (screen === 'main') {
+                promptElement = document.getElementById('prompt-main');
+                promptText = promptElement.textContent.trim();
+            } else {
+                promptElement = document.getElementById(`prompt-${screen}`);
+                promptText = promptElement.value.trim();
+            }
+
+            if (!promptText) {
+                showMessage('Please enter a prompt first', 'error');
+                return;
+            }
+
+            // Show processing message
+            showMessage('✨ Fluffing prompt with AI...', 'success');
+
+            try {
+                const response = await fetch('/prompt/fluff', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ prompt: promptText })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const fluffedPrompt = data.fluffed_prompt;
+
+                    // Update the prompt with the fluffed version
+                    if (screen === 'main') {
+                        promptElement.textContent = fluffedPrompt;
+                    } else {
+                        promptElement.value = fluffedPrompt;
+                    }
+
+                    // Auto-save the prompt
+                    await savePromptFile();
+
+                    showMessage('✨ Prompt fluffed successfully!', 'success');
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error fluffing prompt: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function fluffPlusPrompt() {
+            // Get the main prompt text
+            const promptElement = document.getElementById('prompt-main');
+            const categoryPrompt = promptElement.textContent.trim();
+
+            if (!categoryPrompt) {
+                showMessage('Please enter a category prompt first', 'error');
+                return;
+            }
+
+            // Show processing message
+            showMessage('Generating sub-prompts with AI...', 'success');
+
+            try {
+                const response = await fetch('/prompt/fluff-plus', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ prompt: categoryPrompt })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const subPrompts = data.sub_prompts; // { left: "...", center: "...", right: "..." }
+
+                    // Get the style prompt to append
+                    const style = document.getElementById('prompt-style').value.trim();
+                    const styleSuffix = style ? ' ' + style : '';
+
+                    // Update the per-image prompts with style appended
+                    document.getElementById('prompt-left').value = subPrompts.left + styleSuffix;
+                    document.getElementById('prompt-center').value = subPrompts.center + styleSuffix;
+                    document.getElementById('prompt-right').value = subPrompts.right + styleSuffix;
+
+                    // Update promptData
+                    promptData.left = subPrompts.left + styleSuffix;
+                    promptData.center = subPrompts.center + styleSuffix;
+                    promptData.right = subPrompts.right + styleSuffix;
+
+                    // Auto-save the prompt
+                    await savePromptFile();
+
+                    showMessage('Sub-prompts generated successfully!', 'success');
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error generating sub-prompts: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function diffSinglePrompt(screen) {
+            // Make sure the prompt editor is visible
+            const promptEditor = document.getElementById(`prompt-editor-${screen}`);
+            if (promptEditor.style.display === 'none') {
+                promptEditor.style.display = 'block';
+            }
+
+            // Get the main prompt
+            const mainPrompt = document.getElementById('prompt-main').textContent.trim();
+
+            // Get the other two screens' prompts
+            const screens = ['left', 'center', 'right'];
+            const otherScreens = screens.filter(s => s !== screen);
+            const otherPrompts = {
+                [otherScreens[0]]: document.getElementById(`prompt-${otherScreens[0]}`).value.trim(),
+                [otherScreens[1]]: document.getElementById(`prompt-${otherScreens[1]}`).value.trim()
+            };
+
+            if (!otherPrompts[otherScreens[0]] || !otherPrompts[otherScreens[1]]) {
+                showMessage('Both other prompts must be filled in to generate a third', 'error');
+                return;
+            }
+
+            // Show processing message
+            showMessage(`Generating ${screen} prompt to fit the set...`, 'success');
+
+            try {
+                const response = await fetch('/prompt/diff-single', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        main_prompt: mainPrompt,
+                        screen: screen,
+                        other_prompts: otherPrompts
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const generatedPrompt = data.prompt;
+
+                    // Get the style prompt to append
+                    const style = document.getElementById('prompt-style').value.trim();
+                    const styleSuffix = style ? ' ' + style : '';
+
+                    // Update the prompt with style appended
+                    document.getElementById(`prompt-${screen}`).value = generatedPrompt + styleSuffix;
+
+                    // Update promptData
+                    promptData[screen] = generatedPrompt + styleSuffix;
+
+                    // Auto-save the prompt
+                    await savePromptFile();
+
+                    showMessage(`${screen} prompt generated successfully!`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error generating prompt: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        function setupDragAndDrop() {
+            let draggedPanel = null;
+
+            const panels = document.querySelectorAll('.image-panel');
+
+            panels.forEach(panel => {
+                panel.addEventListener('dragstart', (e) => {
+                    draggedPanel = panel;
+                    panel.style.opacity = '0.5';
+                });
+
+                panel.addEventListener('dragend', (e) => {
+                    panel.style.opacity = '1';
+                });
+
+                panel.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    panel.style.border = '3px solid #16e0bd';
+                });
+
+                panel.addEventListener('dragleave', (e) => {
+                    panel.style.border = '';
+                });
+
+                panel.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    panel.style.border = '';
+
+                    if (draggedPanel && draggedPanel !== panel) {
+                        const screen1 = draggedPanel.dataset.screen;
+                        const screen2 = panel.dataset.screen;
+
+                        // Check if Option/Alt key is held - if so, copy instead of swap
+                        if (e.altKey) {
+                            // Copy screen1 to screen2
+                            await copyImage(screen1, screen2);
+                        } else {
+                            // Swap the images on the server
+                            await swapImages(screen1, screen2);
+                        }
+                    }
+                });
+            });
+        }
+
+        async function copyImage(sourceScreen, targetScreen) {
+            try {
+                showMessage(`Copying ${sourceScreen} to ${targetScreen}...`, 'success');
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/copy`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ sourceScreen, targetScreen })
+                });
+
+                if (response.ok) {
+                    // Reload target image with cache-busting
+                    const targetImg = document.getElementById(`img-${targetScreen}`);
+                    const timestamp = Date.now();
+                    targetImg.src = targetImg.src.split('?')[0] + '?t=' + timestamp;
+
+                    // Copy prompt to target in UI
+                    const sourcePrompt = document.getElementById(`prompt-${sourceScreen}`).value;
+                    document.getElementById(`prompt-${targetScreen}`).value = sourcePrompt;
+
+                    // Copy in promptData
+                    promptData[targetScreen] = promptData[sourceScreen];
+
+                    // Save the updated prompts
+                    await savePromptFile();
+
+                    showMessage(`Copied ${sourceScreen} to ${targetScreen} successfully!`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error copying image: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function swapImages(screen1, screen2) {
+            try {
+                showMessage(`Swapping ${screen1} and ${screen2}...`, 'success');
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/swap`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ screen1, screen2 })
+                });
+
+                if (response.ok) {
+                    // Reload images with cache-busting (files were swapped on server)
+                    const img1 = document.getElementById(`img-${screen1}`);
+                    const img2 = document.getElementById(`img-${screen2}`);
+                    const timestamp = Date.now();
+                    img1.src = img1.src.split('?')[0] + '?t=' + timestamp;
+                    img2.src = img2.src.split('?')[0] + '?t=' + timestamp;
+
+                    // Swap prompts in UI
+                    const prompt1 = document.getElementById(`prompt-${screen1}`).value;
+                    const prompt2 = document.getElementById(`prompt-${screen2}`).value;
+                    document.getElementById(`prompt-${screen1}`).value = prompt2;
+                    document.getElementById(`prompt-${screen2}`).value = prompt1;
+
+                    // Swap in promptData
+                    const temp = promptData[screen1];
+                    promptData[screen1] = promptData[screen2];
+                    promptData[screen2] = temp;
+
+                    // Save the updated prompts
+                    await savePromptFile();
+
+                    showMessage('Images swapped successfully!', 'success');
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error swapping images: ' + errorText, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = 'message ' + type;
+            message.style.display = 'block';
+
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+
+        async function uploadImage(screen, file) {
+            if (!file) return;
+
+            const loadingOverlay = document.getElementById(`loading-${screen}`);
+            loadingOverlay.classList.add('active');
+
+            try {
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/upload/${screen}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/octet-stream'},
+                    body: file
+                });
+
+                if (response.ok) {
+                    // Reload the image with cache-busting
+                    const imgElement = document.getElementById(`img-${screen}`);
+                    const currentSrc = imgElement.src.split('?')[0];
+                    imgElement.src = `${currentSrc}?t=${Date.now()}`;
+                    showMessage(`${screen} image uploaded successfully`, 'success');
+                } else {
+                    showMessage(`Error uploading ${screen} image`, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+                // Clear the file input
+                document.getElementById(`upload-${screen}`).value = '';
+            }
+        }
+
+        async function generateVideo(screen) {
+            const imgElement = document.getElementById(`img-${screen}`);
+            const videoElement = document.getElementById(`video-${screen}`);
+            const loadingOverlay = document.getElementById(`loading-${screen}`);
+
+            // Show loading
+            loadingOverlay.classList.add('active');
+            showMessage(`Generating video from ${screen} image... This may take a minute.`, 'success');
+
+            try {
+                // Start video generation (returns immediately)
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/video/${screen}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    showMessage(`Error starting video generation: ${errorText}`, 'error');
+                    return;
+                }
+
+                const data = await response.json();
+                if (data.status === 'processing') {
+                    const jobId = data.job_id;
+                    showMessage(`Video generation started for ${screen}. Processing in background...`, 'success');
+
+                    // Poll for completion
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const statusResponse = await fetch(`/video-job/${jobId}`);
+                            if (statusResponse.ok) {
+                                const statusData = await statusResponse.json();
+
+                                if (statusData.status === 'complete') {
+                                    clearInterval(pollInterval);
+                                    const videoUrl = statusData.video_url;
+
+                                    // Hide image, show video
+                                    imgElement.style.display = 'none';
+                                    videoElement.style.display = 'block';
+
+                                    // Load and play video with cache-busting
+                                    videoElement.src = `${videoUrl}?t=${Date.now()}`;
+                                    videoElement.load();
+                                    // Play the video (autoplay attribute handles this, but call play() as backup)
+                                    videoElement.play().catch(err => console.log('Autoplay prevented:', err));
+
+                                    loadingOverlay.classList.remove('active');
+                                    showMessage(`Video generated successfully for ${screen}!`, 'success');
+                                } else if (statusData.status === 'error') {
+                                    clearInterval(pollInterval);
+                                    loadingOverlay.classList.remove('active');
+                                    showMessage(`Error generating video: ${statusData.error}`, 'error');
+                                }
+                            }
+                        } catch (pollError) {
+                            console.error('Error polling video status:', pollError);
+                        }
+                    }, 3000); // Poll every 3 seconds
+
+                    // Timeout after 10 minutes
+                    setTimeout(() => {
+                        clearInterval(pollInterval);
+                        loadingOverlay.classList.remove('active');
+                        showMessage(`Video generation timed out for ${screen}`, 'error');
+                    }, 600000);
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        function toggleStyle() {
+            const editor = document.getElementById('style-editor');
+            const isVisible = editor.style.display !== 'none';
+
+            if (!isVisible) {
+                // When showing the editor, populate it with the current style from promptData
+                const styleTextarea = document.getElementById('prompt-style');
+                if (promptData.style) {
+                    styleTextarea.value = promptData.style;
+                }
+            }
+
+            editor.style.display = isVisible ? 'none' : 'block';
+
+            const btn = document.getElementById('style-toggle-btn');
+            btn.textContent = isVisible ? 'Edit Style' : 'Done';
+        }
+
+        function updateScreenPromptsFromMain() {
+            const style = promptData.style ? ' ' + promptData.style : '';
+            const mainPrompt = promptData.main;
+            if (!mainPrompt) return;
+
+            // Update all screen prompts with main prompt + style appended
+            ['left', 'center', 'right'].forEach(screen => {
+                const newPrompt = mainPrompt + style;
+                promptData[screen] = newPrompt;
+                document.getElementById(`prompt-${screen}`).value = newPrompt;
+            });
+        }
+
+        async function regenerateAll() {
+            // Get current prompts from the UI
+            const newStyle = document.getElementById('prompt-style').value.trim();
+            const newPrompt = document.getElementById('prompt-main').textContent.trim();
+
+            if (!newPrompt) {
+                showMessage('Main prompt cannot be empty', 'error');
+                return;
+            }
+
+            // Update prompt data with current values from UI
+            promptData.style = newStyle;
+            promptData.main = newPrompt;
+
+            // Replace per-image prompts with the global prompt + style
+            updateScreenPromptsFromMain();
+
+            // Save the prompt file FIRST before regenerating
+            await savePromptFile();
+
+            // Wait a bit to ensure the file is written
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            showMessage('Regenerating all images...', 'success');
+
+            // Show loading on all panels
+            ['left', 'center', 'right'].forEach(screen => {
+                document.getElementById(`loading-${screen}`).classList.add('active');
+            });
+
+            try {
+                // Regenerate each screen sequentially to avoid race conditions
+                const errors = [];
+                for (const screen of ['left', 'center', 'right']) {
+                    const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate/${screen}`, {
+                        method: 'POST'
+                    });
+
+                    if (response.ok) {
+                        // Reload the image
+                        const imgElement = document.getElementById(`img-${screen}`);
+                        const currentSrc = imgElement.src.split('?')[0];
+                        imgElement.src = `${currentSrc}?t=${Date.now()}`;
+                        // Reload versions
+                        await loadScreenVersions(screen);
+                    } else {
+                        const errorText = await response.text();
+                        console.error(`Failed to regenerate ${screen}:`, errorText);
+                        errors.push(`${screen}: ${errorText}`);
+                    }
+                }
+
+                if (errors.length === 0) {
+                    showMessage('All images regenerated successfully', 'success');
+                } else {
+                    showMessage(`Failed to regenerate ${errors.length} image(s). Check browser console for details.`, 'error');
+                }
+            } catch (error) {
+                showMessage('Error regenerating images: ' + error.message, 'error');
+            } finally {
+                // Hide loading on all panels
+                ['left', 'center', 'right'].forEach(screen => {
+                    document.getElementById(`loading-${screen}`).classList.remove('active');
+                });
+            }
+        }
+
+        async function regenerateImage(screen) {
+            const loadingOverlay = document.getElementById(`loading-${screen}`);
+            loadingOverlay.classList.add('active');
+
+            try {
+                // Get the current screen prompt (user may have edited it)
+                const screenPrompt = document.getElementById(`prompt-${screen}`).value.trim();
+
+                // Save the screen-specific prompt if it's been edited
+                if (screenPrompt !== promptData[screen]) {
+                    promptData[screen] = screenPrompt;
+                    await savePromptFile();
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate/${screen}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    // Reload the entire asset group to get the new image URL
+                    await loadAssetGroup();
+                    // Reload versions
+                    await loadScreenVersions(screen);
+                    showMessage(`${screen} image regenerated successfully`, 'success');
+                } else {
+                    showMessage(`Error regenerating ${screen} image`, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        async function savePromptFile() {
+            try {
+                // Build prompt file content
+                let content = '';
+                if (promptData.style) content += `Style: ${promptData.style}\n`;
+                content += `Main prompt: ${promptData.main}\n`;
+                if (promptData.left) content += `Left: ${promptData.left}\n`;
+                if (promptData.center) content += `Center: ${promptData.center}\n`;
+                if (promptData.right) content += `Right: ${promptData.right}\n`;
+
+                console.log('Saving prompt file:', content);
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/save-prompt`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'text/plain'},
+                    body: content
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Error saving prompt:', errorText);
+                    showMessage('Error saving prompt file', 'error');
+                    throw new Error('Failed to save prompt file');
+                }
+
+                console.log('Prompt file saved successfully');
+                return true;
+            } catch (error) {
+                console.error('Error saving prompt:', error);
+                showMessage('Error: ' + error.message, 'error');
+                throw error;
+            }
+        }
+
+        // Debounced auto-save for prompt editing
+        let promptSaveTimeout = null;
+        let promptDirty = false;
+
+        function handlePromptInput(field) {
+            // Update promptData from the field
+            const element = field === 'main'
+                ? document.getElementById('prompt-main')
+                : document.getElementById(`prompt-${field}`);
+
+            if (!element) return;
+
+            const newValue = field === 'main'
+                ? element.textContent.trim()
+                : element.value.trim();
+
+            promptData[field] = newValue;
+            promptDirty = true;
+
+            // Debounce the save (wait 1 second after last edit)
+            clearTimeout(promptSaveTimeout);
+            promptSaveTimeout = setTimeout(async () => {
+                try {
+                    await savePromptFile();
+                    promptDirty = false;
+                    console.log(`Auto-saved ${field} prompt`);
+                } catch (error) {
+                    console.error('Auto-save failed:', error);
+                }
+            }, 1000);
+        }
+
+        // Save prompts before page unload if there are unsaved changes
+        window.addEventListener('beforeunload', (e) => {
+            if (promptDirty && promptSaveTimeout) {
+                // Clear the timeout and save immediately using sendBeacon for reliable async save
+                clearTimeout(promptSaveTimeout);
+
+                // Build prompt file content
+                let content = '';
+                if (promptData.style) content += `Style: ${promptData.style}\n`;
+                content += `Main prompt: ${promptData.main}\n`;
+                if (promptData.left) content += `Left: ${promptData.left}\n`;
+                if (promptData.center) content += `Center: ${promptData.center}\n`;
+                if (promptData.right) content += `Right: ${promptData.right}\n`;
+
+                // Use sendBeacon for reliable async save during page unload
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = `/asset-group/${encodeURIComponent(assetGroupName)}/save-prompt`;
+                navigator.sendBeacon(url, blob);
+
+                promptDirty = false;
+                console.log('Saved prompts before unload using sendBeacon');
+            }
+        });
+
+        async function flipImage(screen) {
+            const loadingOverlay = document.getElementById(`loading-${screen}`);
+            loadingOverlay.classList.add('active');
+
+            try {
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/flip/${screen}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    // Reload the image with cache-busting
+                    const imgElement = document.getElementById(`img-${screen}`);
+                    const currentSrc = imgElement.src.split('?')[0];
+                    imgElement.src = `${currentSrc}?t=${Date.now()}`;
+                    showMessage(`${screen} image flipped successfully`, 'success');
+                } else {
+                    showMessage(`Error flipping ${screen} image`, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        async function regenerateWithContext(screen) {
+            const loadingOverlay = document.getElementById(`loading-${screen}`);
+            loadingOverlay.classList.add('active');
+
+            try {
+                // Get the screen prompt
+                const screenPrompt = document.getElementById(`prompt-${screen}`).value.trim();
+
+                // Save the screen-specific prompt if it's been edited
+                if (screenPrompt !== promptData[screen]) {
+                    promptData[screen] = screenPrompt;
+                    await savePromptFile();
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                // Get the other two screens
+                const screens = ['left', 'center', 'right'];
+                const otherScreens = screens.filter(s => s !== screen);
+
+                showMessage(`Regenerating ${screen} with context from ${otherScreens.join(' and ')}...`, 'success');
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate-with-context/${screen}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        contextScreens: otherScreens
+                    })
+                });
+
+                if (response.ok) {
+                    // Reload the entire asset group to get the new image URL
+                    await loadAssetGroup();
+                    // Reload versions
+                    await loadScreenVersions(screen);
+                    showMessage(`${screen} image regenerated with context successfully`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    showMessage(`Error regenerating ${screen} image: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        // Edit image modal functions
+        let currentEditScreen = null;
+
+        function openEditModal(screen) {
+            console.log('[Edit] openEditModal called with screen:', screen);
+            currentEditScreen = screen;
+            document.getElementById('edit-screen-name').textContent = screen.toUpperCase();
+            document.getElementById('edit-prompt-input').value = '';
+            document.getElementById('edit-modal').classList.add('active');
+            document.getElementById('edit-prompt-input').focus();
+            console.log('[Edit] Modal should now be visible');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.remove('active');
+            currentEditScreen = null;
+        }
+
+        async function confirmEditImage() {
+            console.log('[Edit] confirmEditImage called, currentEditScreen:', currentEditScreen);
+            if (!currentEditScreen) {
+                console.log('[Edit] No current edit screen, returning');
+                return;
+            }
+
+            const editPrompt = document.getElementById('edit-prompt-input').value.trim();
+            console.log('[Edit] Edit prompt:', editPrompt);
+            if (!editPrompt) {
+                showMessage('Please enter edit instructions', 'error');
+                return;
+            }
+
+            // Save the screen before closing modal (which nulls currentEditScreen)
+            const screen = currentEditScreen;
+            closeEditModal();
+
+            const loadingOverlay = document.getElementById(`loading-${screen}`);
+            console.log('[Edit] Loading overlay element:', loadingOverlay);
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('active');
+            } else {
+                console.error('[Edit] Loading overlay not found for:', screen);
+            }
+
+            try {
+                showMessage(`Morphing ${screen} image...`, 'success');
+
+                const url = `/asset-group/${encodeURIComponent(assetGroupName)}/edit/${screen}`;
+                console.log('[Morph] Making POST request to:', url);
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        prompt: editPrompt
+                    })
+                });
+
+                console.log('[Morph] Response status:', response.status, response.ok);
+                if (response.ok) {
+                    // Reload the image with cache-busting
+                    const imgElement = document.getElementById(`img-${screen}`);
+                    const currentSrc = imgElement.src.split('?')[0];
+                    imgElement.src = `${currentSrc}?t=${Date.now()}`;
+                    showMessage(`${screen} image morphed successfully`, 'success');
+                    console.log('[Morph] Image generated successfully');
+                } else {
+                    const errorText = await response.text();
+                    console.error('[Morph] Server returned error:', response.status, errorText);
+                    showMessage(`Error morphing ${screen} image: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                console.error('[Morph] Exception caught:', error);
+                showMessage('Error: ' + error.message, 'error');
+            } finally {
+                if (loadingOverlay) {
+                    loadingOverlay.classList.remove('active');
+                }
+            }
+        }
+
+        // Close modal on background click
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('edit-modal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeEditModal();
+                }
+            });
+
+            // Handle Enter key in edit prompt
+            document.getElementById('edit-prompt-input').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    confirmEditImage();
+                } else if (e.key === 'Escape') {
+                    closeEditModal();
+                }
+            });
+
+            // Auto-save prompt fields when edited
+            const mainPrompt = document.getElementById('prompt-main');
+            if (mainPrompt) {
+                // Use input event for contenteditable (fires on every change)
+                mainPrompt.addEventListener('input', () => handlePromptInput('main'));
+
+                // Also handle Enter key to blur
+                mainPrompt.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.blur();
+                    }
+                });
+            }
+
+            // Add auto-save for style prompt
+            const stylePrompt = document.getElementById('prompt-style');
+            if (stylePrompt) {
+                stylePrompt.addEventListener('input', () => handlePromptInput('style'));
+            }
+
+            // Add auto-save for screen-specific prompts
+            ['left', 'center', 'right'].forEach(screen => {
+                const promptElement = document.getElementById(`prompt-${screen}`);
+                if (promptElement) {
+                    promptElement.addEventListener('input', () => handlePromptInput(screen));
+
+                    // Keep the Enter key to regenerate behavior
+                    promptElement.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            regenerateImage(screen);
+                        }
+                    });
+                }
+            });
+        });
+
+        // Asset group name editing functions
+        let originalAssetGroupName = '';
+        let isEditingName = false;
+
+        function startEditName() {
+            const nameElement = document.getElementById('asset-group-name');
+            const editBtn = document.getElementById('edit-name-btn');
+            const saveBtn = document.getElementById('save-name-btn');
+            const cancelBtn = document.getElementById('cancel-name-btn');
+
+            // Start editing
+            originalAssetGroupName = assetGroupName;
+            nameElement.contentEditable = 'true';
+            nameElement.classList.add('editable');
+            nameElement.focus();
+
+            // Show Save and Cancel buttons, hide Edit button
+            editBtn.style.display = 'none';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+
+            isEditingName = true;
+
+            // Select all text
+            const range = document.createRange();
+            range.selectNodeContents(nameElement);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        function cancelEditName() {
+            const nameElement = document.getElementById('asset-group-name');
+            const editBtn = document.getElementById('edit-name-btn');
+            const saveBtn = document.getElementById('save-name-btn');
+            const cancelBtn = document.getElementById('cancel-name-btn');
+
+            // Cancel editing
+            nameElement.textContent = originalAssetGroupName;
+            nameElement.contentEditable = 'false';
+            nameElement.classList.remove('editable');
+
+            // Show Edit button, hide Save and Cancel buttons
+            editBtn.style.display = 'inline-block';
+            saveBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+
+            isEditingName = false;
+        }
+
+        async function saveAssetGroupName() {
+            const nameElement = document.getElementById('asset-group-name');
+            const editBtn = document.getElementById('edit-name-btn');
+            const saveBtn = document.getElementById('save-name-btn');
+            const cancelBtn = document.getElementById('cancel-name-btn');
+            const newName = nameElement.textContent.trim();
+
+            if (!newName) {
+                showMessage('Asset group name cannot be empty', 'error');
+                nameElement.textContent = originalAssetGroupName;
+                return;
+            }
+
+            if (newName === originalAssetGroupName) {
+                // No change, just exit edit mode
+                cancelEditName();
+                return;
+            }
+
+            // Validate name (basic validation)
+            if (!/^[a-zA-Z0-9_\-\/]+$/.test(newName)) {
+                showMessage('Asset group name can only contain letters, numbers, hyphens, underscores, and slashes', 'error');
+                nameElement.textContent = originalAssetGroupName;
+                return;
+            }
+
+            try {
+                showMessage('Renaming asset group...', 'success');
+
+                const response = await fetch(`/asset-group/${encodeURIComponent(originalAssetGroupName)}/rename`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ newName: newName })
+                });
+
+                if (response.ok) {
+                    showMessage('Asset group renamed successfully. Redirecting...', 'success');
+
+                    // Reset editing state
+                    nameElement.contentEditable = 'false';
+                    nameElement.classList.remove('editable');
+                    editBtn.style.display = 'inline-block';
+                    saveBtn.style.display = 'none';
+                    cancelBtn.style.display = 'none';
+                    isEditingName = false;
+
+                    // Navigate to new URL
+                    setTimeout(() => {
+                        window.location.href = '/asset_group.html?id=' + encodeURIComponent(newName);
+                    }, 1000);
+                } else {
+                    const errorText = await response.text();
+                    showMessage('Error renaming asset group: ' + errorText, 'error');
+                    nameElement.textContent = originalAssetGroupName;
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+                nameElement.textContent = originalAssetGroupName;
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', async function() {
+            await init();
+
+            // Handle Enter key to save name, Escape to cancel
+            const nameElement = document.getElementById('asset-group-name');
+            if (nameElement) {
+                nameElement.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (isEditingName) {
+                            saveAssetGroupName();
+                        }
+                    } else if (e.key === 'Escape') {
+                        if (isEditingName) {
+                            cancelEditName();
+                        }
+                    }
+                });
+            }
+
+            // Always show controls and prompt editors
+            // Show prompt container if not already shown
+            const promptContainer = document.getElementById('prompt-container');
+            if (promptContainer.style.display === 'none') {
+                promptContainer.style.display = 'block';
+                // Set default main prompt to asset group name
+                const mainPrompt = document.getElementById('prompt-main');
+                if (!mainPrompt.textContent || mainPrompt.textContent.trim() === '') {
+                    mainPrompt.textContent = assetGroupName;
+                    promptData.main = assetGroupName;
+                }
+            }
+
+            ['left', 'center', 'right'].forEach(screen => {
+                const controls = document.getElementById(`controls-${screen}`);
+                const promptEditor = document.getElementById(`prompt-editor-${screen}`);
+
+                if (controls) {
+                    controls.style.display = 'flex';
+                }
+
+                // Always show prompt editor
+                if (promptEditor) {
+                    promptEditor.style.display = 'block';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

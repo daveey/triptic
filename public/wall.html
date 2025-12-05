@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triptic - Wall</title>
+    <link rel="stylesheet" href="/shared/nav.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
+            padding: 0;
+            padding-top: 50px; /* Account for fixed nav */
+            padding-bottom: 80px; /* Account for fixed navigation controls */
+        }
+
+        .header {
+            background: #16213e;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .nav {
+            background: #16213e;
+            padding: 10px 20px;
+            border-bottom: 1px solid #0f3460;
+            text-align: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+
+        .nav a {
+            color: #e94560;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+
+        .nav a:hover {
+            color: #ff6b6b;
+        }
+
+        .nav a.active {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .controls {
+            background: #16213e;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .controls label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .controls select, .controls input {
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .controls button {
+            background: #e94560;
+            border: none;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .controls button:hover {
+            background: #ff6b6b;
+        }
+
+        .wall-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            min-height: calc(100vh - 180px);
+        }
+
+        .wall {
+            display: flex;
+            gap: 10px;
+            background: #0d0d0d;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .screen {
+            position: relative;
+            background: #000;
+            border: 3px solid #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .playlist-header {
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 20px;
+            color: #16e0bd;
+            font-weight: bold;
+            white-space: nowrap;
+            z-index: 10;
+        }
+
+        .playlist-name-link {
+            cursor: pointer;
+            text-decoration: underline;
+            transition: color 0.2s;
+        }
+
+        .playlist-name-link:hover {
+            color: #1df5d0;
+        }
+
+        .playlist-counter {
+            color: #888;
+            margin-left: 8px;
+        }
+
+        .screen-label {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .screen iframe {
+            border: none;
+            display: block;
+        }
+
+        .info {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .time-display {
+            font-family: monospace;
+            font-size: 18px;
+            color: #e94560;
+            background: #1a1a2e;
+            padding: 8px 16px;
+            border-radius: 4px;
+        }
+
+        .navigation-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #16213e;
+            border-top: 1px solid #0f3460;
+            z-index: 1000;
+        }
+
+        .navigation-controls button {
+            background: #e94560;
+            border: none;
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+
+        .navigation-controls button:hover {
+            background: #ff6b6b;
+        }
+
+        .current-asset-group {
+            color: #16e0bd;
+            font-size: 18px;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: #1a1a2e;
+            border-radius: 4px;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        .current-asset-group:hover {
+            background: #252542;
+            color: #1df5d0;
+        }
+    </style>
+</head>
+<body>
+    <script src="/shared/nav.js"></script>
+
+    <div class="controls">
+        <label>
+            Scale:
+            <select id="scale">
+                <option value="0.15">15%</option>
+                <option value="0.2">20%</option>
+                <option value="0.25" selected>25%</option>
+                <option value="0.3">30%</option>
+                <option value="0.4">40%</option>
+                <option value="0.5">50%</option>
+            </select>
+        </label>
+        <label>
+            Gap:
+            <select id="gap">
+                <option value="0">None</option>
+                <option value="5">5px</option>
+                <option value="10" selected>10px</option>
+                <option value="20">20px</option>
+                <option value="40">40px</option>
+            </select>
+        </label>
+        <label>
+            Image Change:
+            <select id="frequency">
+                <option value="10">10 seconds</option>
+                <option value="30">30 seconds</option>
+                <option value="60" selected>1 minute</option>
+                <option value="120">2 minutes</option>
+                <option value="300">5 minutes</option>
+                <option value="600">10 minutes</option>
+            </select>
+        </label>
+        <label>
+            Playlist:
+            <select id="playlist">
+                <option value="">Loading...</option>
+            </select>
+        </label>
+        <button onclick="reloadScreens()">Reload Screens</button>
+        <div class="time-display" id="time">--:--:--</div>
+        <div id="save-indicator" style="display: none; color: #4caf50; font-size: 12px; padding: 8px;">✓ Saved</div>
+    </div>
+
+    <div class="wall-container">
+        <div class="wall" id="wall">
+            <div class="screen" id="screen-left">
+                <span class="screen-label">Left</span>
+                <iframe id="iframe-left"></iframe>
+            </div>
+            <div class="screen" id="screen-center" style="position: relative;">
+                <div id="playlist-header" class="playlist-header">Loading...</div>
+                <span class="screen-label">Center</span>
+                <iframe id="iframe-center"></iframe>
+            </div>
+            <div class="screen" id="screen-right">
+                <span class="screen-label">Right</span>
+                <iframe id="iframe-right"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <div class="navigation-controls">
+        <button onclick="previousAssetGroup()">< Prev</button>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+            <a href="#" id="current-asset-group-link" class="current-asset-group">Loading...</a>
+            <div id="playlist-info" style="color: #888; font-size: 14px;"></div>
+        </div>
+        <button onclick="nextAssetGroup()">Next ></button>
+    </div>
+
+    <script>
+        // Original screen dimensions (portrait)
+        const SCREEN_WIDTH = 1080;
+        const SCREEN_HEIGHT = 1920;
+
+        // Get base URL for iframes
+        const baseUrl = window.location.origin + '/index.html';
+
+        function getScale() {
+            return parseFloat(document.getElementById('scale').value);
+        }
+
+        function getGap() {
+            return parseInt(document.getElementById('gap').value);
+        }
+
+        function updateScreenSizes() {
+            const scale = getScale();
+            const gap = getGap();
+            const width = Math.round(SCREEN_WIDTH * scale);
+            const height = Math.round(SCREEN_HEIGHT * scale);
+
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.style.width = width + 'px';
+                screen.style.height = height + 'px';
+            });
+
+            document.querySelectorAll('.screen iframe').forEach(iframe => {
+                iframe.style.width = SCREEN_WIDTH + 'px';
+                iframe.style.height = SCREEN_HEIGHT + 'px';
+                iframe.style.transform = `scale(${scale})`;
+                iframe.style.transformOrigin = 'top left';
+            });
+
+            document.getElementById('wall').style.gap = gap + 'px';
+        }
+
+        function loadScreens() {
+            document.getElementById('iframe-left').src = baseUrl + '?id=left';
+            document.getElementById('iframe-center').src = baseUrl + '?id=center';
+            document.getElementById('iframe-right').src = baseUrl + '?id=right';
+        }
+
+        function reloadScreens() {
+            const iframes = document.querySelectorAll('.screen iframe');
+            iframes.forEach((iframe, index) => {
+                const screens = ['left', 'center', 'right'];
+                const screenId = screens[index];
+                // Force reload by appending timestamp to bypass cache
+                iframe.src = baseUrl + '?id=' + screenId + '&t=' + Date.now();
+            });
+        }
+
+        // Track initial load state
+        let playlistLoaded = false;
+        let frequencyLoaded = false;
+        let currentPlaylistAssetGroups = [];
+        let currentAssetGroupIndex = -1;
+        let currentAssetGroupName = '';
+
+        function updateAssetGroupDisplay(assetGroupName) {
+            console.log('[updateAssetGroupDisplay] Called with assetGroupName:', assetGroupName);
+            currentAssetGroupName = assetGroupName;
+            const link = document.getElementById('current-asset-group-link');
+            const playlist = document.getElementById('playlist').value;
+            console.log('[updateAssetGroupDisplay] Current playlist:', playlist);
+
+            link.textContent = assetGroupName || 'No asset group';
+            // The asset group name is already the full ID (e.g., "art/model")
+            link.href = `/asset_group.html?id=${encodeURIComponent(assetGroupName)}`;
+            console.log('[updateAssetGroupDisplay] Set link text to:', link.textContent);
+            console.log('[updateAssetGroupDisplay] Set link href to:', link.href);
+
+            // Update playlist info
+            updatePlaylistInfo();
+        }
+
+        function navigateToAssetGroup() {
+            if (!currentAssetGroupName) return;
+            // The asset group name is already the full ID
+            window.location.href = `/asset_group.html?id=${encodeURIComponent(currentAssetGroupName)}`;
+        }
+
+        function navigateToPlaylist() {
+            const playlist = document.getElementById('playlist').value;
+            if (!playlist) return;
+            window.location.href = `/playlists.html?name=${encodeURIComponent(playlist)}`;
+        }
+
+        function updatePlaylistInfo() {
+            const playlistInfo = document.getElementById('playlist-info');
+            const playlistHeader = document.getElementById('playlist-header');
+            const playlist = document.getElementById('playlist').value;
+            const frequency = parseInt(document.getElementById('frequency').value);
+
+            if (currentPlaylistAssetGroups.length > 0) {
+                const position = currentAssetGroupIndex + 1;
+                const total = currentPlaylistAssetGroups.length;
+                // Calculate total playlist duration: number of asset groups × change rate
+                const totalDurationSeconds = total * frequency;
+                const timeStr = formatTime(totalDurationSeconds);
+
+                // Bottom info - simple text
+                playlistInfo.textContent = `${playlist} ${position}/${total} · ${timeStr}`;
+
+                // Top header - playlist name as clickable link, counter as separate text
+                playlistHeader.innerHTML = `<span class="playlist-name-link">${playlist}</span><span class="playlist-counter">${position}/${total} (${timeStr})</span>`;
+
+                // Attach click handler to the playlist name
+                const playlistNameLink = playlistHeader.querySelector('.playlist-name-link');
+                if (playlistNameLink) {
+                    playlistNameLink.addEventListener('click', navigateToPlaylist);
+                }
+            } else {
+                playlistInfo.textContent = '';
+                if (playlist) {
+                    playlistHeader.innerHTML = `<span class="playlist-name-link">${playlist}</span>`;
+
+                    // Attach click handler to the playlist name
+                    const playlistNameLink = playlistHeader.querySelector('.playlist-name-link');
+                    if (playlistNameLink) {
+                        playlistNameLink.addEventListener('click', navigateToPlaylist);
+                    }
+                } else {
+                    playlistHeader.textContent = 'No playlist';
+                }
+            }
+        }
+
+        function formatTime(seconds) {
+            if (seconds < 60) {
+                return `${seconds}s`;
+            } else if (seconds < 3600) {
+                const minutes = Math.floor(seconds / 60);
+                return `${minutes}m`;
+            } else {
+                const hours = Math.floor(seconds / 3600);
+                return `${hours}h`;
+            }
+        }
+
+        async function nextAssetGroup() {
+            console.log('[nextAssetGroup] Called');
+            console.log('[nextAssetGroup] currentPlaylistAssetGroups:', currentPlaylistAssetGroups);
+            console.log('[nextAssetGroup] currentAssetGroupIndex:', currentAssetGroupIndex);
+
+            if (currentPlaylistAssetGroups.length === 0) {
+                console.log('[nextAssetGroup] No asset groups in playlist');
+                return;
+            }
+            currentAssetGroupIndex = (currentAssetGroupIndex + 1) % currentPlaylistAssetGroups.length;
+            console.log('[nextAssetGroup] New index:', currentAssetGroupIndex);
+            console.log('[nextAssetGroup] Advanced to:', currentPlaylistAssetGroups[currentAssetGroupIndex]);
+
+            const assetGroupName = currentPlaylistAssetGroups[currentAssetGroupIndex];
+            // Update the display
+            updateAssetGroupDisplay(assetGroupName);
+
+            // Reload screens to reflect updated server state
+            reloadScreens();
+        }
+
+        async function previousAssetGroup() {
+            console.log('[previousAssetGroup] Called');
+            console.log('[previousAssetGroup] currentPlaylistAssetGroups:', currentPlaylistAssetGroups);
+            console.log('[previousAssetGroup] currentAssetGroupIndex:', currentAssetGroupIndex);
+
+            if (currentPlaylistAssetGroups.length === 0) {
+                console.log('[previousAssetGroup] No asset groups in playlist');
+                return;
+            }
+            currentAssetGroupIndex = (currentAssetGroupIndex - 1 + currentPlaylistAssetGroups.length) % currentPlaylistAssetGroups.length;
+            console.log('[previousAssetGroup] New index:', currentAssetGroupIndex);
+            console.log('[previousAssetGroup] Advanced to:', currentPlaylistAssetGroups[currentAssetGroupIndex]);
+
+            const assetGroupName = currentPlaylistAssetGroups[currentAssetGroupIndex];
+            // Update the display
+            updateAssetGroupDisplay(assetGroupName);
+
+            // Reload screens to reflect updated server state
+            reloadScreens();
+        }
+
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('time').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        async function loadFrequency() {
+            try {
+                const response = await fetch('/config');
+                const config = await response.json();
+                if (config.frequency) {
+                    document.getElementById('frequency').value = config.frequency;
+                }
+                frequencyLoaded = true;
+            } catch (err) {
+                console.warn('Failed to load frequency:', err);
+            }
+        }
+
+        async function loadPlaylists() {
+            try {
+                const response = await fetch('/playlists');
+                const data = await response.json();
+                const playlistSelect = document.getElementById('playlist');
+                playlistSelect.innerHTML = '';
+                data.playlists.forEach(function(name) {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    if (name === data.current) {
+                        option.selected = true;
+                    }
+                    playlistSelect.appendChild(option);
+                });
+                playlistLoaded = true;
+                // Load asset groups for the current playlist
+                if (data.current) {
+                    await loadPlaylistAssetGroups(data.current);
+                }
+            } catch (err) {
+                console.warn('Failed to load playlists:', err);
+            }
+        }
+
+        function showSaveIndicator() {
+            const indicator = document.getElementById('save-indicator');
+            indicator.style.display = 'block';
+            setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 2000);
+        }
+
+        async function updatePlaylist() {
+            // Don't auto-save during initial load
+            if (!playlistLoaded) return;
+
+            const playlist = document.getElementById('playlist').value;
+            try {
+                const response = await fetch('/playlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: playlist })
+                });
+                if (response.ok) {
+                    showSaveIndicator();
+                    // Reload the screens to show the new playlist
+                    reloadScreens();
+                    // Load playlist asset groups for navigation
+                    await loadPlaylistAssetGroups(playlist);
+                } else {
+                    console.error('Failed to update playlist');
+                }
+            } catch (err) {
+                console.error('Failed to update playlist:', err);
+            }
+        }
+
+        async function loadPlaylistAssetGroups(playlist) {
+            console.log('[loadPlaylistAssetGroups] Loading asset groups for playlist:', playlist);
+            try {
+                const url = `/playlists/${encodeURIComponent(playlist)}/asset-groups`;
+                console.log('[loadPlaylistAssetGroups] Fetching URL:', url);
+                const response = await fetch(url);
+                console.log('[loadPlaylistAssetGroups] Response status:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('[loadPlaylistAssetGroups] Received data:', data);
+                    currentPlaylistAssetGroups = data.asset_groups || [];
+
+                    // Try to load the current asset group from state and find its index
+                    const stateResponse = await fetch('/state/current-asset-group');
+                    if (stateResponse.ok) {
+                        const stateData = await stateResponse.json();
+                        const currentAssetGroup = stateData.asset_group;
+                        console.log('[loadPlaylistAssetGroups] Current asset group from state:', currentAssetGroup);
+
+                        if (currentAssetGroup) {
+                            // currentAssetGroup is already the complete asset group ID
+                            // Find its index in the playlist
+                            const index = currentPlaylistAssetGroups.indexOf(currentAssetGroup);
+                            if (index >= 0) {
+                                currentAssetGroupIndex = index;
+                                console.log('[loadPlaylistAssetGroups] Found current asset group at index:', currentAssetGroupIndex);
+                                updateAssetGroupDisplay(currentPlaylistAssetGroups[currentAssetGroupIndex]);
+                            } else {
+                                // Not in this playlist, start at beginning
+                                currentAssetGroupIndex = 0;
+                                if (currentPlaylistAssetGroups.length > 0) {
+                                    updateAssetGroupDisplay(currentPlaylistAssetGroups[0]);
+                                } else {
+                                    updateAssetGroupDisplay('');
+                                }
+                            }
+                        } else {
+                            // No current asset group, start at beginning
+                            currentAssetGroupIndex = 0;
+                            if (currentPlaylistAssetGroups.length > 0) {
+                                updateAssetGroupDisplay(currentPlaylistAssetGroups[0]);
+                            } else {
+                                updateAssetGroupDisplay('');
+                            }
+                        }
+                    } else {
+                        // Failed to load state, start at beginning
+                        currentAssetGroupIndex = 0;
+                        if (currentPlaylistAssetGroups.length > 0) {
+                            updateAssetGroupDisplay(currentPlaylistAssetGroups[0]);
+                        } else {
+                            updateAssetGroupDisplay('');
+                        }
+                    }
+
+                    console.log('[loadPlaylistAssetGroups] Set currentPlaylistAssetGroups:', currentPlaylistAssetGroups);
+                    console.log('[loadPlaylistAssetGroups] Set currentAssetGroupIndex:', currentAssetGroupIndex);
+                } else {
+                    console.log('[loadPlaylistAssetGroups] Response not OK, status:', response.status);
+                    currentPlaylistAssetGroups = [];
+                    currentAssetGroupIndex = -1;
+                    updateAssetGroupDisplay('');
+                }
+            } catch (err) {
+                console.error('[loadPlaylistAssetGroups] Failed to load playlist asset groups:', err);
+                currentPlaylistAssetGroups = [];
+                currentAssetGroupIndex = -1;
+                updateAssetGroupDisplay('');
+            }
+        }
+
+        async function updateFrequency() {
+            // Don't auto-save during initial load
+            if (!frequencyLoaded) return;
+
+            const frequency = parseInt(document.getElementById('frequency').value);
+            try {
+                const response = await fetch('/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ frequency })
+                });
+                if (response.ok) {
+                    showSaveIndicator();
+                    updatePlaylistInfo(); // Update display with new timing
+                } else {
+                    console.error('Failed to update frequency');
+                }
+            } catch (err) {
+                console.error('Failed to update frequency:', err);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('scale').addEventListener('change', updateScreenSizes);
+        document.getElementById('gap').addEventListener('change', updateScreenSizes);
+        document.getElementById('frequency').addEventListener('change', updateFrequency);
+        document.getElementById('playlist').addEventListener('change', updatePlaylist);
+
+        // Initialize
+        updateScreenSizes();
+        loadScreens();
+        loadFrequency();
+        loadPlaylists();
+        updateTime();
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>
