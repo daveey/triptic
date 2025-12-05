@@ -1,5 +1,6 @@
 """HTTP server for triptic."""
 
+import base64
 import uuid
 from dataclasses import dataclass, field, asdict
 from typing import Optional
@@ -245,6 +246,75 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         self.public_dir = directory or str(get_public_dir())
         super().__init__(*args, directory=self.public_dir, **kwargs)
 
+    def _requires_auth(self, path: str) -> bool:
+        """Check if a path requires authentication.
+
+        Protected paths:
+        - Management pages: /wall.html, /playlists.html, /settings.html, /asset_group.html
+        - API endpoints (except heartbeat)
+
+        Unprotected paths:
+        - Screen views: / and index.html (with or without ?id= parameter)
+        - Static assets: /content/*, /shared/*
+        """
+        # Parse the path without query string
+        parsed_path = urllib.parse.urlparse(path).path
+
+        # Allow screen view (index.html and root)
+        if parsed_path in ['/', '/index.html', '']:
+            return False
+
+        # Allow static assets
+        if parsed_path.startswith('/content/') or parsed_path.startswith('/shared/'):
+            return False
+
+        # Allow defaults
+        if parsed_path.startswith('/defaults/'):
+            return False
+
+        # Allow heartbeat endpoint (for screen health monitoring)
+        if parsed_path.startswith('/heartbeat/'):
+            return False
+
+        # Everything else requires auth
+        return True
+
+    def _check_auth(self) -> bool:
+        """Check if the request has valid basic authentication.
+
+        Returns True if auth is valid or not required, False otherwise.
+        """
+        auth_header = self.headers.get('Authorization')
+        if not auth_header:
+            return False
+
+        try:
+            # Parse "Basic <base64>" header
+            auth_type, auth_string = auth_header.split(' ', 1)
+            if auth_type.lower() != 'basic':
+                return False
+
+            # Decode base64
+            decoded = base64.b64decode(auth_string).decode('utf-8')
+            username, password = decoded.split(':', 1)
+
+            # Get credentials from environment or use defaults
+            expected_username = os.environ.get('TRIPTIC_AUTH_USERNAME', 'daveey')
+            expected_password = os.environ.get('TRIPTIC_AUTH_PASSWORD', 'daviddavid')
+
+            return username == expected_username and password == expected_password
+        except Exception as e:
+            logging.debug(f"Auth check failed: {e}")
+            return False
+
+    def _send_auth_required(self) -> None:
+        """Send 401 Unauthorized response with WWW-Authenticate header."""
+        self.send_response(401)
+        self.send_header('WWW-Authenticate', 'Basic realm="Triptic Management"')
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b'<html><body><h1>401 Unauthorized</h1><p>Authentication required.</p></body></html>')
+
     def log_message(self, format: str, *args) -> None:
         """Log HTTP requests to separate requests log."""
         requests_logger = logging.getLogger('requests')
@@ -264,6 +334,12 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """Handle GET requests."""
+        # Check authentication for protected paths
+        if self._requires_auth(self.path):
+            if not self._check_auth():
+                self._send_auth_required()
+                return
+
         if self.path == '/config':
             self._handle_get_config()
         elif self.path == '/settings':
@@ -316,6 +392,12 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         """Handle POST requests."""
+        # Check authentication for protected paths
+        if self._requires_auth(self.path):
+            if not self._check_auth():
+                self._send_auth_required()
+                return
+
         if self.path.startswith('/heartbeat/'):
             screen_id = self.path.split('/')[-1]
             self._handle_heartbeat(screen_id)
@@ -376,6 +458,12 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         """Handle DELETE requests."""
+        # Check authentication for protected paths
+        if self._requires_auth(self.path):
+            if not self._check_auth():
+                self._send_auth_required()
+                return
+
         if self.path.startswith('/asset-group/'):
             self._handle_delete_asset_group()
         elif self.path.startswith('/playlist/'):
