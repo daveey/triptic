@@ -1785,23 +1785,31 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             # Get asset group from database
+            logging.info(f"Flip: Looking for asset group '{imageset_name}'")
             asset_group = get_asset_group(imageset_name)
             if not asset_group:
+                logging.error(f"Flip: Asset group '{imageset_name}' not found in database")
                 self.send_error(404, f"Asset group '{imageset_name}' not found")
                 return
 
             # Get the current screen asset
+            logging.info(f"Flip: Asset group found, getting {screen} asset")
             screen_asset = getattr(asset_group, screen)
             if not screen_asset.current_version_uuid:
+                logging.error(f"Flip: No current version UUID for {screen}")
                 self.send_error(404, "No current version to flip")
                 return
 
             # Load current image from storage
             current_uuid = screen_asset.current_version_uuid
+            logging.info(f"Flip: Loading image {current_uuid} from storage")
             image_path = storage.get_file_path(current_uuid)
             if not image_path or not image_path.exists():
+                logging.error(f"Flip: Image file not found for UUID {current_uuid}, path={image_path}")
                 self.send_error(404, "Image file not found")
                 return
+
+            logging.info(f"Flip: All checks passed, flipping image at {image_path}")
 
             # Flip the image
             img = Image.open(image_path)
