@@ -1850,7 +1850,7 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             # Add new version to asset
             new_version = AssetVersion(
                 version_uuid=new_uuid,
-                content_uuid=new_uuid,
+                content=new_uuid,
                 prompt=prompt,
                 timestamp=datetime.now().isoformat()
             )
