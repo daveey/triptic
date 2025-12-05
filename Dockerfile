@@ -7,15 +7,17 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+# Copy dependency files and README (required by pyproject.toml)
+COPY pyproject.toml uv.lock README.md ./
 
 # Install dependencies using uv
 RUN uv sync --frozen --no-dev
 
 # Copy application code
 COPY src/ ./src/
+# Copy public directory but exclude img symlink (will be created by server)
 COPY public/ ./public/
+RUN rm -f ./public/img
 
 # Create data directory for persistent storage
 RUN mkdir -p /data

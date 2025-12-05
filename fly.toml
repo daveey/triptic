@@ -1,40 +1,36 @@
-# Fly.io configuration for Triptic
-# See full documentation at https://fly.io/docs/reference/configuration/
+# fly.toml app configuration file generated for triptic-daveey on 2025-12-04T19:12:47-08:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-# Replace with your app name (must be globally unique)
-app = "triptic"
-primary_region = "sjc"  # San Jose - change to region near you
+app = 'triptic-daveey'
+primary_region = 'sjc'
 
-# Build configuration
 [build]
 
 [env]
-  PORT = "8080"
+  PORT = '8080'
 
-# HTTP service configuration
+[[mounts]]
+  source = 'triptic_data'
+  destination = '/data'
+  initial_size = '3gb'
+
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0  # Scale to zero when idle
+  min_machines_running = 0
 
-  # Health check - adjust if your app needs more time to start
   [[http_service.checks]]
-    grace_period = "10s"
-    interval = "30s"
-    method = "GET"
-    timeout = "5s"
-    path = "/"
+    interval = '30s'
+    timeout = '10s'
+    grace_period = '30s'
+    method = 'GET'
+    path = '/wall.html'
 
-# Persistent storage volume (required for SQLite + images)
-[mounts]
-  source = "triptic_data"
-  destination = "/data"
-  initial_size = "3gb"  # Start with 3GB (free tier)
-
-# VM resources
 [[vm]]
-  size = "shared-cpu-1x"  # 256MB RAM (free tier)
-  memory = "256mb"
+  size = 'shared-cpu-1x'
+  memory = '256mb'
   cpus = 1
