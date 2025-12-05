@@ -369,15 +369,13 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_get_video_job_status()
         elif self.path.startswith('/content/assets/'):
             self._handle_get_asset_file()
-        elif self.path.startswith('/defaults/'):
-            self._handle_get_default_file()
         elif self.path == '/' or self.path == '':
             # Redirect root to wall
             self.send_response(302)
             self.send_header('Location', '/wall.html')
             self.end_headers()
         else:
-            # Delegate to parent for static file serving
+            # Delegate to parent for static file serving (includes /defaults/)
             super().do_GET()
 
     def end_headers(self) -> None:
@@ -1675,44 +1673,6 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self.send_error(500, f"Error serving asset file: {e}")
-
-    def _handle_get_default_file(self) -> None:
-        """Serve default placeholder files from ~/.triptic/content/defaults/."""
-        try:
-            # Extract filename from path: /defaults/{filename}.{ext}
-            # Strip query parameters (e.g., ?t=timestamp) if present
-            path_without_query = self.path.split('?')[0]
-            filename = path_without_query.split('/')[-1]
-
-            # Get the defaults directory
-            content_dir = get_content_dir()
-            defaults_dir = content_dir / "defaults"
-            file_path = defaults_dir / filename
-
-            if not file_path.exists():
-                self.send_error(404, "Default file not found")
-                return
-
-            # Determine content type
-            import mimetypes
-            content_type, _ = mimetypes.guess_type(str(file_path))
-            if content_type is None:
-                content_type = 'application/octet-stream'
-
-            # Send the file
-            self.send_response(200)
-            self.send_header('Content-type', content_type)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=31536000')  # Cache for 1 year
-            self.end_headers()
-
-            with open(file_path, 'rb') as f:
-                self.wfile.write(f.read())
-
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.send_error(500, f"Error serving default file: {e}")
 
     def _handle_reorder_playlist(self) -> None:
         """Reorder imagesets in a playlist."""
