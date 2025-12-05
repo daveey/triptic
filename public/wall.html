@@ -473,8 +473,21 @@
             console.log('[nextAssetGroup] Advanced to:', currentPlaylistAssetGroups[currentAssetGroupIndex]);
 
             const assetGroupName = currentPlaylistAssetGroups[currentAssetGroupIndex];
+
             // Update the display
             updateAssetGroupDisplay(assetGroupName);
+
+            // Update server state so screens know which asset group to display
+            try {
+                await fetch('/state/current-asset-group', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ asset_group: assetGroupName })
+                });
+            } catch (err) {
+                console.error('[nextAssetGroup] Failed to update server state:', err);
+            }
 
             // Reload screens to reflect updated server state
             reloadScreens();
@@ -494,8 +507,21 @@
             console.log('[previousAssetGroup] Advanced to:', currentPlaylistAssetGroups[currentAssetGroupIndex]);
 
             const assetGroupName = currentPlaylistAssetGroups[currentAssetGroupIndex];
+
             // Update the display
             updateAssetGroupDisplay(assetGroupName);
+
+            // Update server state so screens know which asset group to display
+            try {
+                await fetch('/state/current-asset-group', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ asset_group: assetGroupName })
+                });
+            } catch (err) {
+                console.error('[previousAssetGroup] Failed to update server state:', err);
+            }
 
             // Reload screens to reflect updated server state
             reloadScreens();
