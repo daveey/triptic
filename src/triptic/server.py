@@ -1638,7 +1638,7 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(500, f"Error getting job status: {e}")
 
     def _handle_get_asset_file(self) -> None:
-        """Serve asset files from ~/.triptic/content/assets/."""
+        """Serve asset files from the assets directory."""
         try:
             # Extract filename from path: /content/assets/{uuid}.{ext}
             # Strip query parameters (e.g., ?t=timestamp) if present
@@ -3502,7 +3502,17 @@ def delete_imageset(imageset_name: str) -> bool:
 
 def get_content_dir() -> Path:
     """Get the path to the content directory."""
-    content_dir = Path.home() / ".triptic" / "content"
+    import os
+
+    # Check for environment variable override (e.g., for production deployment)
+    if 'TRIPTIC_CONTENT_DIR' in os.environ:
+        content_dir = Path(os.environ['TRIPTIC_CONTENT_DIR'])
+    # Check if /data exists (Fly.io persistent volume)
+    elif Path('/data').exists() and Path('/data').is_dir():
+        content_dir = Path('/data/content')
+    else:
+        content_dir = Path.home() / ".triptic" / "content"
+
     content_dir.mkdir(parents=True, exist_ok=True)
     return content_dir
 

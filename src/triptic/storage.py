@@ -15,7 +15,17 @@ DEFAULT_RIGHT_UUID = "00000000-0000-0000-0000-000000000003"
 
 def get_assets_dir() -> Path:
     """Get the path to the assets directory."""
-    assets_dir = Path.home() / ".triptic" / "content" / "assets"
+    import os
+
+    # Check for environment variable override (e.g., for production deployment)
+    if 'TRIPTIC_ASSETS_DIR' in os.environ:
+        assets_dir = Path(os.environ['TRIPTIC_ASSETS_DIR'])
+    # Check if /data exists (Fly.io persistent volume)
+    elif Path('/data').exists() and Path('/data').is_dir():
+        assets_dir = Path('/data/assets')
+    else:
+        assets_dir = Path.home() / ".triptic" / "content" / "assets"
+
     assets_dir.mkdir(parents=True, exist_ok=True)
     return assets_dir
 
