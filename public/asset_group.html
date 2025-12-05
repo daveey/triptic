@@ -767,24 +767,42 @@
                 const timestamp = Date.now();
                 if (data.left && data.left.image_url) {
                     const imgEl = document.getElementById('img-left');
+                    imgEl.onerror = function() {
+                        this.src = `/defaults/default_left.png`;
+                        this.onerror = null; // Prevent infinite loop
+                    };
                     imgEl.src = `${data.left.image_url}?t=${timestamp}`;
                     if (data.left.local_path) {
                         imgEl.title = data.left.local_path;
                     }
+                } else {
+                    document.getElementById('img-left').src = `/defaults/default_left.png?t=${timestamp}`;
                 }
                 if (data.center && data.center.image_url) {
                     const imgEl = document.getElementById('img-center');
+                    imgEl.onerror = function() {
+                        this.src = `/defaults/default_center.png`;
+                        this.onerror = null; // Prevent infinite loop
+                    };
                     imgEl.src = `${data.center.image_url}?t=${timestamp}`;
                     if (data.center.local_path) {
                         imgEl.title = data.center.local_path;
                     }
+                } else {
+                    document.getElementById('img-center').src = `/defaults/default_center.png?t=${timestamp}`;
                 }
                 if (data.right && data.right.image_url) {
                     const imgEl = document.getElementById('img-right');
+                    imgEl.onerror = function() {
+                        this.src = `/defaults/default_right.png`;
+                        this.onerror = null; // Prevent infinite loop
+                    };
                     imgEl.src = `${data.right.image_url}?t=${timestamp}`;
                     if (data.right.local_path) {
                         imgEl.title = data.right.local_path;
                     }
+                } else {
+                    document.getElementById('img-right').src = `/defaults/default_right.png?t=${timestamp}`;
                 }
 
                 // Check if all screens have 0 versions (new empty asset group that exists but has no images)
