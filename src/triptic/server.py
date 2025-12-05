@@ -3570,6 +3570,11 @@ def run_server(port: int = 3000, host: str = "localhost") -> None:
     # Run UUID versioning migration
     db.migrate_to_uuid_versioning()
 
+    # Initialize default placeholder assets
+    logging.info("Initializing default assets...")
+    storage.initialize_default_assets()
+    logging.info("Default assets initialized")
+
     logging.info(f"Serving from: {public_dir}")
     logging.info(f"Content dir: {get_content_dir()}")
     logging.info(f"Server running at http://{host}:{port}")

@@ -7,12 +7,57 @@ from pathlib import Path
 from typing import Optional
 import logging
 
+# Default asset UUIDs (well-known UUIDs for default placeholder images)
+DEFAULT_LEFT_UUID = "00000000-0000-0000-0000-000000000001"
+DEFAULT_CENTER_UUID = "00000000-0000-0000-0000-000000000002"
+DEFAULT_RIGHT_UUID = "00000000-0000-0000-0000-000000000003"
+
 
 def get_assets_dir() -> Path:
     """Get the path to the assets directory."""
     assets_dir = Path.home() / ".triptic" / "content" / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     return assets_dir
+
+
+def get_public_dir() -> Path:
+    """Get the public directory path."""
+    # Check if running from installed package or development
+    import sys
+    if hasattr(sys, '_MEIPASS'):
+        # Running as PyInstaller bundle
+        return Path(sys._MEIPASS) / 'public'
+    else:
+        # Running as normal Python script
+        return Path(__file__).parent.parent.parent / 'public'
+
+
+def initialize_default_assets() -> None:
+    """
+    Copy default placeholder images to assets directory with known UUIDs.
+    This should be called once at startup to ensure defaults are always available.
+    """
+    public_dir = get_public_dir()
+    defaults_dir = public_dir / 'defaults'
+    assets_dir = get_assets_dir()
+
+    # Mapping of default files to their UUIDs
+    defaults = {
+        'default_left.png': DEFAULT_LEFT_UUID,
+        'default_center.png': DEFAULT_CENTER_UUID,
+        'default_right.png': DEFAULT_RIGHT_UUID,
+    }
+
+    for filename, content_uuid in defaults.items():
+        source = defaults_dir / filename
+        dest = assets_dir / f"{content_uuid}.png"
+
+        # Only copy if source exists and dest doesn't exist
+        if source.exists() and not dest.exists():
+            shutil.copy2(source, dest)
+            logging.info(f"Initialized default asset: {dest}")
+        elif not source.exists():
+            logging.warning(f"Default asset source not found: {source}")
 
 
 def generate_uuid() -> str:
@@ -277,18 +322,30 @@ def get_asset_file_path_by_group(asset_group_id: str, screen: str) -> Optional[P
     Get the file path for an asset by asset_group_id and screen.
 
     This function looks up the UUID from the database and returns the file path.
+    If no asset exists, returns the default placeholder asset for that screen.
 
     Args:
         asset_group_id: The asset group identifier (e.g., 'cyberdoc3', 'art/jazz')
         screen: The screen position ('left', 'center', or 'right')
 
     Returns:
-        Path to the file if found, None otherwise
+        Path to the file (real asset or default placeholder)
     """
     content_uuid = get_asset_uuid(asset_group_id, screen)
     if content_uuid and not content_uuid.startswith('img/'):
         file_path = get_file_path(content_uuid)
         if file_path:
             return file_path
+
+    # If no asset found, return default placeholder for this screen
+    default_uuids = {
+        'left': DEFAULT_LEFT_UUID,
+        'center': DEFAULT_CENTER_UUID,
+        'right': DEFAULT_RIGHT_UUID,
+    }
+
+    default_uuid = default_uuids.get(screen)
+    if default_uuid:
+        return get_file_path(default_uuid)
 
     return None
