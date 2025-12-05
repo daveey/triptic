@@ -1814,9 +1814,9 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             if not current_uuid and screen_asset.versions:
                 logging.info(f"Flip: Searching through {len(screen_asset.versions)} versions")
                 for version in screen_asset.versions:
-                    test_path = storage.get_file_path(version.content_uuid)
+                    test_path = storage.get_file_path(version.content)
                     if test_path and test_path.exists():
-                        current_uuid = version.content_uuid
+                        current_uuid = version.content
                         image_path = test_path
                         logging.info(f"Flip: Found available version {current_uuid}")
                         break
