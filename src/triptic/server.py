@@ -1795,18 +1795,35 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             # Get the current screen asset
             logging.info(f"Flip: Asset group found, getting {screen} asset")
             screen_asset = getattr(asset_group, screen)
-            if not screen_asset.current_version_uuid:
-                logging.error(f"Flip: No current version UUID for {screen}")
-                self.send_error(404, "No current version to flip")
-                return
 
-            # Load current image from storage
-            current_uuid = screen_asset.current_version_uuid
-            logging.info(f"Flip: Loading image {current_uuid} from storage")
-            image_path = storage.get_file_path(current_uuid)
-            if not image_path or not image_path.exists():
-                logging.error(f"Flip: Image file not found for UUID {current_uuid}, path={image_path}")
-                self.send_error(404, "Image file not found")
+            # Try to find an available version to flip
+            # First try current_version_uuid, then fall back to any available version
+            current_uuid = None
+            image_path = None
+
+            if screen_asset.current_version_uuid:
+                logging.info(f"Flip: Trying current version UUID {screen_asset.current_version_uuid}")
+                image_path = storage.get_file_path(screen_asset.current_version_uuid)
+                if image_path and image_path.exists():
+                    current_uuid = screen_asset.current_version_uuid
+                    logging.info(f"Flip: Current version file found")
+                else:
+                    logging.warning(f"Flip: Current version UUID {screen_asset.current_version_uuid} not found on disk, searching for available version")
+
+            # If current version not found, try to find ANY available version
+            if not current_uuid and screen_asset.versions:
+                logging.info(f"Flip: Searching through {len(screen_asset.versions)} versions")
+                for version in screen_asset.versions:
+                    test_path = storage.get_file_path(version.content_uuid)
+                    if test_path and test_path.exists():
+                        current_uuid = version.content_uuid
+                        image_path = test_path
+                        logging.info(f"Flip: Found available version {current_uuid}")
+                        break
+
+            if not current_uuid or not image_path:
+                logging.error(f"Flip: No available version found for {screen}")
+                self.send_error(404, "No available image to flip")
                 return
 
             logging.info(f"Flip: All checks passed, flipping image at {image_path}")
