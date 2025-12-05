@@ -54,6 +54,7 @@ class Asset:
     versions: list[AssetVersion] = field(default_factory=list)
     current_version_uuid: Optional[str] = None  # UUID of the current version
     image_url: Optional[str] = None  # URL to the current version's image
+    video_url: Optional[str] = None  # URL to the video version if it exists
     local_path: Optional[str] = None  # Local filesystem path to the current version's file
 
     def get_versions(self) -> list[AssetVersion]:
@@ -106,6 +107,8 @@ class Asset:
         }
         if self.image_url:
             result['image_url'] = self.image_url
+        if self.video_url:
+            result['video_url'] = self.video_url
         if self.local_path:
             result['local_path'] = self.local_path
         return result
@@ -117,6 +120,7 @@ class Asset:
             versions=[AssetVersion.from_dict(v) for v in data.get('versions', [])],
             current_version_uuid=data.get('current_version_uuid'),
             image_url=data.get('image_url'),
+            video_url=data.get('video_url'),
             local_path=data.get('local_path')
         )
 

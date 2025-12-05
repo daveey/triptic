@@ -771,73 +771,127 @@
 
                 if (data.left && data.left.image_url) {
                     const imgEl = document.getElementById('img-left');
-                    imgEl.onerror = function() {
-                        this.src = `/defaults/default_left.png`;
-                        this.onerror = null; // Prevent infinite loop
-                        leftPanel.draggable = false; // Disable drag for default images
-                        leftPanel.style.cursor = 'default';
-                    };
-                    imgEl.onload = function() {
-                        // Only enable drag if this is not a default image
-                        if (!this.src.includes('/defaults/')) {
-                            leftPanel.draggable = true;
-                            leftPanel.style.cursor = 'grab';
+                    const videoEl = document.getElementById('video-left');
+
+                    // Check if video version exists
+                    if (data.left.video_url) {
+                        // Show video instead of image
+                        imgEl.style.display = 'none';
+                        videoEl.style.display = 'block';
+                        videoEl.src = `${data.left.video_url}?t=${timestamp}`;
+                        videoEl.load();
+                        videoEl.play().catch(err => console.log('Autoplay prevented:', err));
+                        leftPanel.draggable = true;
+                        leftPanel.style.cursor = 'grab';
+                    } else {
+                        // Show image
+                        imgEl.style.display = 'block';
+                        videoEl.style.display = 'none';
+                        imgEl.onerror = function() {
+                            this.src = `/defaults/default_left.png`;
+                            this.onerror = null; // Prevent infinite loop
+                            leftPanel.draggable = false; // Disable drag for default images
+                            leftPanel.style.cursor = 'default';
+                        };
+                        imgEl.onload = function() {
+                            // Only enable drag if this is not a default image
+                            if (!this.src.includes('/defaults/')) {
+                                leftPanel.draggable = true;
+                                leftPanel.style.cursor = 'grab';
+                            }
+                        };
+                        imgEl.src = `${data.left.image_url}?t=${timestamp}`;
+                        if (data.left.local_path) {
+                            imgEl.title = data.left.local_path;
                         }
-                    };
-                    imgEl.src = `${data.left.image_url}?t=${timestamp}`;
-                    if (data.left.local_path) {
-                        imgEl.title = data.left.local_path;
                     }
                 } else {
                     document.getElementById('img-left').src = `/defaults/default_left.png?t=${timestamp}`;
+                    document.getElementById('video-left').style.display = 'none';
                     leftPanel.draggable = false;
                     leftPanel.style.cursor = 'default';
                 }
                 if (data.center && data.center.image_url) {
                     const imgEl = document.getElementById('img-center');
-                    imgEl.onerror = function() {
-                        this.src = `/defaults/default_center.png`;
-                        this.onerror = null; // Prevent infinite loop
-                        centerPanel.draggable = false; // Disable drag for default images
-                        centerPanel.style.cursor = 'default';
-                    };
-                    imgEl.onload = function() {
-                        // Only enable drag if this is not a default image
-                        if (!this.src.includes('/defaults/')) {
-                            centerPanel.draggable = true;
-                            centerPanel.style.cursor = 'grab';
+                    const videoEl = document.getElementById('video-center');
+
+                    // Check if video version exists
+                    if (data.center.video_url) {
+                        // Show video instead of image
+                        imgEl.style.display = 'none';
+                        videoEl.style.display = 'block';
+                        videoEl.src = `${data.center.video_url}?t=${timestamp}`;
+                        videoEl.load();
+                        videoEl.play().catch(err => console.log('Autoplay prevented:', err));
+                        centerPanel.draggable = true;
+                        centerPanel.style.cursor = 'grab';
+                    } else {
+                        // Show image
+                        imgEl.style.display = 'block';
+                        videoEl.style.display = 'none';
+                        imgEl.onerror = function() {
+                            this.src = `/defaults/default_center.png`;
+                            this.onerror = null; // Prevent infinite loop
+                            centerPanel.draggable = false; // Disable drag for default images
+                            centerPanel.style.cursor = 'default';
+                        };
+                        imgEl.onload = function() {
+                            // Only enable drag if this is not a default image
+                            if (!this.src.includes('/defaults/')) {
+                                centerPanel.draggable = true;
+                                centerPanel.style.cursor = 'grab';
+                            }
+                        };
+                        imgEl.src = `${data.center.image_url}?t=${timestamp}`;
+                        if (data.center.local_path) {
+                            imgEl.title = data.center.local_path;
                         }
-                    };
-                    imgEl.src = `${data.center.image_url}?t=${timestamp}`;
-                    if (data.center.local_path) {
-                        imgEl.title = data.center.local_path;
                     }
                 } else {
                     document.getElementById('img-center').src = `/defaults/default_center.png?t=${timestamp}`;
+                    document.getElementById('video-center').style.display = 'none';
                     centerPanel.draggable = false;
                     centerPanel.style.cursor = 'default';
                 }
                 if (data.right && data.right.image_url) {
                     const imgEl = document.getElementById('img-right');
-                    imgEl.onerror = function() {
-                        this.src = `/defaults/default_right.png`;
-                        this.onerror = null; // Prevent infinite loop
-                        rightPanel.draggable = false; // Disable drag for default images
-                        rightPanel.style.cursor = 'default';
-                    };
-                    imgEl.onload = function() {
-                        // Only enable drag if this is not a default image
-                        if (!this.src.includes('/defaults/')) {
-                            rightPanel.draggable = true;
-                            rightPanel.style.cursor = 'grab';
+                    const videoEl = document.getElementById('video-right');
+
+                    // Check if video version exists
+                    if (data.right.video_url) {
+                        // Show video instead of image
+                        imgEl.style.display = 'none';
+                        videoEl.style.display = 'block';
+                        videoEl.src = `${data.right.video_url}?t=${timestamp}`;
+                        videoEl.load();
+                        videoEl.play().catch(err => console.log('Autoplay prevented:', err));
+                        rightPanel.draggable = true;
+                        rightPanel.style.cursor = 'grab';
+                    } else {
+                        // Show image
+                        imgEl.style.display = 'block';
+                        videoEl.style.display = 'none';
+                        imgEl.onerror = function() {
+                            this.src = `/defaults/default_right.png`;
+                            this.onerror = null; // Prevent infinite loop
+                            rightPanel.draggable = false; // Disable drag for default images
+                            rightPanel.style.cursor = 'default';
+                        };
+                        imgEl.onload = function() {
+                            // Only enable drag if this is not a default image
+                            if (!this.src.includes('/defaults/')) {
+                                rightPanel.draggable = true;
+                                rightPanel.style.cursor = 'grab';
+                            }
+                        };
+                        imgEl.src = `${data.right.image_url}?t=${timestamp}`;
+                        if (data.right.local_path) {
+                            imgEl.title = data.right.local_path;
                         }
-                    };
-                    imgEl.src = `${data.right.image_url}?t=${timestamp}`;
-                    if (data.right.local_path) {
-                        imgEl.title = data.right.local_path;
                     }
                 } else {
                     document.getElementById('img-right').src = `/defaults/default_right.png?t=${timestamp}`;
+                    document.getElementById('video-right').style.display = 'none';
                     rightPanel.draggable = false;
                     rightPanel.style.cursor = 'default';
                 }

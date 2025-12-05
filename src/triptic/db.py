@@ -317,6 +317,7 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                 # Build image URL for current version
                 local_path = None
                 image_url = ""
+                video_url = None
                 if content_uuid and not content_uuid.startswith('img/'):
                     # Check if file exists, otherwise use default
                     file_path = storage.get_file_path(content_uuid)
@@ -324,6 +325,11 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                         # File exists, use it
                         image_url = f"/content/assets/{content_uuid}.png"
                         local_path = str(file_path)
+
+                        # Check if video version exists
+                        video_path = file_path.with_suffix('.mp4')
+                        if video_path.exists():
+                            video_url = f"/content/assets/{content_uuid}.mp4"
                     else:
                         # File doesn't exist, use default for this screen
                         default_uuids = {
@@ -343,6 +349,7 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                     'versions': versions,
                     'current_version_uuid': current_version_uuid,
                     'image_url': image_url,
+                    'video_url': video_url,
                     'local_path': local_path
                 }
             else:
