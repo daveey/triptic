@@ -318,9 +318,23 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                 local_path = None
                 image_url = ""
                 if content_uuid and not content_uuid.startswith('img/'):
-                    # UUID-based path
-                    image_url = f"/content/assets/{content_uuid}.png"
-                    local_path = str(storage.get_assets_dir() / f"{content_uuid}.png")
+                    # Check if file exists, otherwise use default
+                    file_path = storage.get_file_path(content_uuid)
+                    if file_path and file_path.exists():
+                        # File exists, use it
+                        image_url = f"/content/assets/{content_uuid}.png"
+                        local_path = str(file_path)
+                    else:
+                        # File doesn't exist, use default for this screen
+                        default_uuids = {
+                            'left': storage.DEFAULT_LEFT_UUID,
+                            'center': storage.DEFAULT_CENTER_UUID,
+                            'right': storage.DEFAULT_RIGHT_UUID,
+                        }
+                        default_uuid = default_uuids.get(screen)
+                        if default_uuid:
+                            image_url = f"/content/assets/{default_uuid}.png"
+                            local_path = str(storage.get_assets_dir() / f"{default_uuid}.png")
                 else:
                     # Fallback
                     image_url = f"/img/{screen}/{asset_group_id}.png"
@@ -332,7 +346,26 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                     'local_path': local_path
                 }
             else:
-                result[screen] = {'versions': [], 'current_version_uuid': None, 'image_url': ''}
+                # No asset in database, use default
+                default_uuids = {
+                    'left': storage.DEFAULT_LEFT_UUID,
+                    'center': storage.DEFAULT_CENTER_UUID,
+                    'right': storage.DEFAULT_RIGHT_UUID,
+                }
+                default_uuid = default_uuids.get(screen)
+                if default_uuid:
+                    image_url = f"/content/assets/{default_uuid}.png"
+                    local_path = str(storage.get_assets_dir() / f"{default_uuid}.png")
+                else:
+                    image_url = ''
+                    local_path = None
+
+                result[screen] = {
+                    'versions': [],
+                    'current_version_uuid': None,
+                    'image_url': image_url,
+                    'local_path': local_path
+                }
 
         return result
 
