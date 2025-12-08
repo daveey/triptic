@@ -243,30 +243,45 @@
             color: #1df5d0;
         }
 
-        .center-url-display {
-            text-align: center;
+        .url-display {
+            text-align: left;
             padding: 20px;
-            margin-top: 20px;
+            margin: 20px auto;
+            max-width: 900px;
         }
 
-        .center-url-display label {
+        .url-display h3 {
             color: #888;
-            font-size: 12px;
+            font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            display: block;
-            margin-bottom: 8px;
+            margin-bottom: 15px;
+            text-align: center;
         }
 
-        .center-url-display .url {
+        .url-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+
+        .url-row .label {
+            color: #888;
+            font-size: 14px;
+            min-width: 100px;
+            text-align: right;
+        }
+
+        .url-row .url {
             background: #1a1a2e;
             color: #16e0bd;
-            padding: 12px 20px;
+            padding: 8px 16px;
             border-radius: 4px;
             font-family: monospace;
-            font-size: 14px;
-            word-break: break-all;
+            font-size: 13px;
             border: 1px solid #0f3460;
+            flex: 1;
         }
     </style>
 </head>
@@ -335,9 +350,24 @@
         </div>
     </div>
 
-    <div class="center-url-display">
-        <label>Center Frame URL</label>
-        <div class="url" id="center-url">Loading...</div>
+    <div class="url-display">
+        <h3>Screen URLs</h3>
+        <div class="url-row">
+            <div class="label">Playlists:</div>
+            <div class="url" id="url-playlists">Loading...</div>
+        </div>
+        <div class="url-row">
+            <div class="label">Left:</div>
+            <div class="url" id="url-left">Loading...</div>
+        </div>
+        <div class="url-row">
+            <div class="label">Center:</div>
+            <div class="url" id="url-center">Loading...</div>
+        </div>
+        <div class="url-row">
+            <div class="label">Right:</div>
+            <div class="url" id="url-right">Loading...</div>
+        </div>
     </div>
 
     <div class="navigation-controls">
@@ -425,41 +455,18 @@
             // Update playlist info
             updatePlaylistInfo();
 
-            // Update center frame URL display
-            updateCenterFrameUrl(assetGroupName);
+            // Update screen URLs display
+            updateScreenUrls();
         }
 
-        async function updateCenterFrameUrl(assetGroupName) {
-            const urlDisplay = document.getElementById('center-url');
+        function updateScreenUrls() {
+            const origin = window.location.origin;
 
-            if (!assetGroupName) {
-                urlDisplay.textContent = 'No asset group selected';
-                return;
-            }
-
-            try {
-                // Fetch asset group info to get center frame URL
-                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}`, {
-                    credentials: 'same-origin'
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-
-                    if (data.center && data.center.image_url) {
-                        // Construct the full URL
-                        const fullUrl = window.location.origin + data.center.image_url;
-                        urlDisplay.textContent = fullUrl;
-                    } else {
-                        urlDisplay.textContent = 'No center frame image available';
-                    }
-                } else {
-                    urlDisplay.textContent = 'Failed to load center frame URL';
-                }
-            } catch (err) {
-                console.error('[updateCenterFrameUrl] Error:', err);
-                urlDisplay.textContent = 'Error loading URL';
-            }
+            // Update all screen URLs
+            document.getElementById('url-playlists').textContent = `${origin}/playlists.html`;
+            document.getElementById('url-left').textContent = `${origin}/?id=left`;
+            document.getElementById('url-center').textContent = `${origin}/?id=center`;
+            document.getElementById('url-right').textContent = `${origin}/?id=right`;
         }
 
         function navigateToAssetGroup() {
@@ -786,6 +793,7 @@
         loadPlaylists();
         updateTime();
         setInterval(updateTime, 1000);
+        updateScreenUrls();
     </script>
 </body>
 </html>
