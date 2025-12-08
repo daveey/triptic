@@ -452,8 +452,6 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_swap_images()
         elif self.path.startswith('/asset-group/') and '/copy' in self.path:
             self._handle_copy_image()
-        elif self.path.startswith('/asset-group/') and '/save-prompt' in self.path:
-            self._handle_save_prompt()
         elif self.path == '/prompt/fluff':
             self._handle_fluff_prompt()
         elif self.path == '/prompt/fluff-plus':
@@ -1309,34 +1307,22 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json_error(400, "Invalid screen name")
                 return
 
-            # Try to read prompt from request body, fallback to prompt file or database
-            prompt = None
+            # Read prompt from request body
             content_length = int(self.headers.get('Content-Length', 0))
-            if content_length > 0:
-                body = self.rfile.read(content_length)
-                data = json.loads(body.decode())
-                prompt = data.get('prompt')
+            if content_length == 0:
+                self._send_json_error(400, "No request body provided")
+                return
+
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode())
+            prompt = data.get('prompt')
+
+            if not prompt:
+                self._send_json_error(400, "No prompt provided in request")
+                return
 
             # Get or create asset group
             asset_group = get_asset_group(imageset_name)
-
-            if not prompt:
-                # Fallback to reading from prompt file
-                prompt = read_imageset_prompt(imageset_name, screen)
-
-            if not prompt and asset_group:
-                # Fallback to getting prompt from the current version in database
-                screen_asset = getattr(asset_group, screen)
-                if screen_asset.versions:
-                    prompt = screen_asset.versions[-1].prompt
-
-            if not prompt:
-                # Return 404 if asset group doesn't exist, 400 otherwise
-                if not asset_group:
-                    self._send_json_error(404, f"Asset group '{imageset_name}' not found")
-                else:
-                    self._send_json_error(400, "No prompt provided or found")
-                return
 
             if not asset_group:
                 # Create new asset group
@@ -1403,19 +1389,20 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(400, "Expected exactly 2 context screens")
                 return
 
-            # Read the screen-specific prompt from file or database
-            prompt = read_imageset_prompt(imageset_name, screen)
+            # Get the prompt from the database
+            asset_group = get_asset_group(imageset_name)
+            if not asset_group:
+                self.send_error(404, f"Asset group '{imageset_name}' not found")
+                return
 
-            if not prompt:
-                # Fallback to getting prompt from the database
-                asset_group = get_asset_group(imageset_name)
-                if asset_group:
-                    screen_asset = getattr(asset_group, screen)
-                    if screen_asset.versions:
-                        prompt = screen_asset.versions[-1].prompt
+            screen_asset = getattr(asset_group, screen)
+            if not screen_asset.versions:
+                self.send_error(400, f"No versions found for {imageset_name}/{screen}")
+                return
 
+            prompt = screen_asset.versions[-1].prompt
             if not prompt:
-                self.send_error(404, "No prompt file found for this imageset")
+                self.send_error(400, f"No prompt found for {imageset_name}/{screen}")
                 return
 
             # Get paths to context images
@@ -1796,34 +1783,37 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             logging.info(f"Flip: Asset group found, getting {screen} asset")
             screen_asset = getattr(asset_group, screen)
 
-            # Try to find an available version to flip
-            # First try current_version_uuid, then fall back to any available version
-            current_uuid = None
-            image_path = None
+            # Use the same logic as get_displayable_images to find which version to flip
+            # First try current_version_uuid, then fall back to versions[0]
+            content_uuid = None
+            current_version = None
 
-            if screen_asset.current_version_uuid:
-                logging.info(f"Flip: Trying current version UUID {screen_asset.current_version_uuid}")
-                image_path = storage.get_file_path(screen_asset.current_version_uuid)
-                if image_path and image_path.exists():
-                    current_uuid = screen_asset.current_version_uuid
-                    logging.info(f"Flip: Current version file found")
-                else:
-                    logging.warning(f"Flip: Current version UUID {screen_asset.current_version_uuid} not found on disk, searching for available version")
-
-            # If current version not found, try to find ANY available version
-            if not current_uuid and screen_asset.versions:
-                logging.info(f"Flip: Searching through {len(screen_asset.versions)} versions")
+            # Try to find current version
+            if screen_asset.current_version_uuid and screen_asset.versions:
+                logging.info(f"Flip: Looking for current version UUID {screen_asset.current_version_uuid}")
                 for version in screen_asset.versions:
-                    test_path = storage.get_file_path(version.content)
-                    if test_path and test_path.exists():
-                        current_uuid = version.content
-                        image_path = test_path
-                        logging.info(f"Flip: Found available version {current_uuid}")
+                    if version.version_uuid == screen_asset.current_version_uuid:
+                        content_uuid = version.content
+                        current_version = version
+                        logging.info(f"Flip: Found current version, content UUID: {content_uuid}")
                         break
 
-            if not current_uuid or not image_path:
-                logging.error(f"Flip: No available version found for {screen}")
+            # If no matching version found, use first version (same as get_displayable_images)
+            if not content_uuid and screen_asset.versions:
+                content_uuid = screen_asset.versions[0].content
+                current_version = screen_asset.versions[0]
+                logging.info(f"Flip: Using first version (index 0), content UUID: {content_uuid}")
+
+            if not content_uuid:
+                logging.error(f"Flip: No versions available for {screen}")
                 self.send_error(404, "No available image to flip")
+                return
+
+            # Check if file exists
+            image_path = storage.get_file_path(content_uuid)
+            if not image_path or not image_path.exists():
+                logging.error(f"Flip: Content file not found for UUID {content_uuid}")
+                self.send_error(404, "Image file not found")
                 return
 
             logging.info(f"Flip: All checks passed, flipping image at {image_path}")
@@ -1838,13 +1828,7 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             new_path = assets_dir / f"{new_uuid}{image_path.suffix}"
             flipped.save(new_path)
 
-            # Find current version to copy the prompt
-            current_version = None
-            for version in screen_asset.versions:
-                if version.version_uuid == current_uuid:
-                    current_version = version
-                    break
-
+            # Copy the prompt from the flipped version
             prompt = current_version.prompt if current_version else ""
 
             # Add new version to asset
@@ -2320,51 +2304,6 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
     def _handle_duplicate_asset_group(self) -> None:
         """Alias for backward compatibility with new asset_group naming."""
         return self._handle_duplicate_imageset()
-
-    def _handle_save_prompt(self) -> None:
-        """Save the prompt file for an imageset."""
-        try:
-            # Parse path: /imageset/{name}/save-prompt
-            from urllib.parse import unquote
-            path_parts = self.path.split('/')
-            imageset_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
-
-            if not imageset_name:
-                self.send_error(400, "Missing imageset name")
-                return
-
-            # Read the prompt content
-            content_length = int(self.headers.get('Content-Length', 0))
-            prompt_content = self.rfile.read(content_length).decode('utf-8')
-
-            # Get the prompt file path
-            content_dir = get_content_dir()
-            img_dir = content_dir / "img"
-
-            if '/' in imageset_name:
-                # Playlist-specific imageset
-                parts = imageset_name.split('/')
-                playlist_dir = img_dir / parts[0]
-                base_name = parts[1]
-                prompt_file = playlist_dir / f"{base_name}.prompt.txt"
-            else:
-                # Screen-specific imageset
-                prompt_file = img_dir / "left" / f"{imageset_name}.prompt.txt"
-
-            # Create parent directory if needed
-            prompt_file.parent.mkdir(parents=True, exist_ok=True)
-
-            # Save the prompt file
-            prompt_file.write_text(prompt_content)
-
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            response = json.dumps({'status': 'ok', 'saved': str(prompt_file)})
-            self.wfile.write(response.encode())
-        except Exception as e:
-            self.send_error(500, f"Error saving prompt: {e}")
 
     def _handle_fluff_prompt(self) -> None:
         """Use Gemini to expand a simple prompt into a more descriptive one."""

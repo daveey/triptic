@@ -707,6 +707,12 @@
             center: '',
             right: ''
         };
+        // Store version data for each screen (includes prompts for each version)
+        let versionData = {
+            left: [],
+            center: [],
+            right: []
+        };
         async function init() {
             // Get asset group name from URL parameter
             const urlParams = new URLSearchParams(window.location.search);
@@ -762,6 +768,13 @@
                 }
 
                 const data = await response.json();
+
+                // Store version data for each screen (includes prompts)
+                ['left', 'center', 'right'].forEach(screen => {
+                    if (data[screen] && data[screen].versions) {
+                        versionData[screen] = data[screen].versions;
+                    }
+                });
 
                 // Load images using URLs from API (respects current version)
                 const timestamp = Date.now();
@@ -912,14 +925,62 @@
                         document.getElementById(`controls-${screen}`).style.display = 'flex';
                     });
                 } else {
-                    // Try to load prompt file
-                    const baseUrl = window.location.origin + '/img/';
-                    loadPrompt(`${baseUrl}left/${assetGroupName}.prompt.txt`);
+                    // Load prompts from current versions
+                    loadPromptsFromVersionData(data);
                 }
 
             } catch (error) {
                 showMessage('Error loading asset group: ' + error.message, 'error');
             }
+        }
+
+        function loadPromptsFromVersionData(data) {
+            /**
+             * Load prompts from the current version's data for each screen.
+             * Shows the prompt container and populates prompt textareas.
+             */
+            document.getElementById('prompt-container').style.display = 'block';
+
+            ['left', 'center', 'right'].forEach(screen => {
+                if (data[screen] && data[screen].versions && data[screen].versions.length > 0) {
+                    // Find the current version
+                    const current_uuid = data[screen].current_version_uuid;
+                    let currentVersion = null;
+
+                    if (current_uuid) {
+                        // Try to find version matching current_version_uuid
+                        currentVersion = data[screen].versions.find(v => v.version_uuid === current_uuid);
+                    }
+
+                    // If not found, use first version (matches display logic)
+                    if (!currentVersion) {
+                        currentVersion = data[screen].versions[0];
+                    }
+
+                    if (currentVersion && currentVersion.prompt) {
+                        const promptTextarea = document.getElementById(`prompt-${screen}`);
+                        promptTextarea.value = currentVersion.prompt;
+                        promptData[screen] = currentVersion.prompt;
+                        console.log(`Loaded ${screen} prompt from current version:`, currentVersion.prompt.substring(0, 50));
+                    }
+
+                    // Show the prompt editor and controls
+                    document.getElementById(`prompt-editor-${screen}`).style.display = 'block';
+                    document.getElementById(`controls-${screen}`).style.display = 'flex';
+                }
+            });
+
+            // Set main prompt from first screen's prompt or asset group name
+            if (promptData.left) {
+                promptData.main = promptData.left;
+            } else if (promptData.center) {
+                promptData.main = promptData.center;
+            } else if (promptData.right) {
+                promptData.main = promptData.right;
+            } else {
+                promptData.main = assetGroupName;
+            }
+            document.getElementById('prompt-main').textContent = promptData.main;
         }
 
         function showPlaceholderImages() {
@@ -1113,6 +1174,9 @@
                     // Reload versions to update the UI highlighting
                     await loadScreenVersions(screen);
 
+                    // Update prompt to show the selected version's prompt
+                    updatePromptForVersion(screen, version);
+
                     showMessage(`Switched to version ${version} for ${screen}`, 'success');
                 } else {
                     const errorData = await response.json();
@@ -1122,6 +1186,34 @@
                 showMessage('Error: ' + error.message, 'error');
             } finally {
                 loadingOverlay.classList.remove('active');
+            }
+        }
+
+        function updatePromptForVersion(screen, versionNumber) {
+            /**
+             * Update the prompt textarea to show the prompt for the specified version.
+             * Version number is 1-indexed (matches UI display).
+             */
+            const versions = versionData[screen];
+            if (!versions || versions.length === 0) {
+                console.log(`No version data available for ${screen}`);
+                return;
+            }
+
+            // Version numbers are 1-indexed in UI, but array is 0-indexed
+            const versionIndex = versionNumber - 1;
+            if (versionIndex < 0 || versionIndex >= versions.length) {
+                console.log(`Invalid version number ${versionNumber} for ${screen}`);
+                return;
+            }
+
+            const versionInfo = versions[versionIndex];
+            if (versionInfo && versionInfo.prompt) {
+                // Update the prompt textarea
+                const promptTextarea = document.getElementById(`prompt-${screen}`);
+                promptTextarea.value = versionInfo.prompt;
+                promptData[screen] = versionInfo.prompt;
+                console.log(`Updated ${screen} prompt to version ${versionNumber}: ${versionInfo.prompt.substring(0, 50)}...`);
             }
         }
 
@@ -1374,9 +1466,6 @@
                         promptElement.value = fluffedPrompt;
                     }
 
-                    // Auto-save the prompt
-                    await savePromptFile();
-
                     showMessage('✨ Prompt fluffed successfully!', 'success');
                 } else {
                     const errorText = await response.text();
@@ -1425,9 +1514,6 @@
                     promptData.left = subPrompts.left + styleSuffix;
                     promptData.center = subPrompts.center + styleSuffix;
                     promptData.right = subPrompts.right + styleSuffix;
-
-                    // Auto-save the prompt
-                    await savePromptFile();
 
                     showMessage('Sub-prompts generated successfully!', 'success');
                 } else {
@@ -1491,9 +1577,6 @@
                     // Update promptData
                     promptData[screen] = generatedPrompt + styleSuffix;
 
-                    // Auto-save the prompt
-                    await savePromptFile();
-
                     showMessage(`${screen} prompt generated successfully!`, 'success');
                 } else {
                     const errorText = await response.text();
@@ -1531,6 +1614,19 @@
                 panel.addEventListener('drop', async (e) => {
                     e.preventDefault();
                     panel.style.border = '';
+
+                    // Check if files are being dropped from file system
+                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        const file = e.dataTransfer.files[0];
+                        // Validate it's an image
+                        if (file.type.startsWith('image/')) {
+                            const screen = panel.dataset.screen;
+                            await uploadImage(screen, file);
+                        } else {
+                            showMessage('Please drop an image file', 'error');
+                        }
+                        return; // Don't proceed with panel swap logic
+                    }
 
                     if (draggedPanel && draggedPanel !== panel) {
                         const screen1 = draggedPanel.dataset.screen;
@@ -1573,9 +1669,6 @@
                     // Copy in promptData
                     promptData[targetScreen] = promptData[sourceScreen];
 
-                    // Save the updated prompts
-                    await savePromptFile();
-
                     showMessage(`Copied ${sourceScreen} to ${targetScreen} successfully!`, 'success');
                 } else {
                     const errorText = await response.text();
@@ -1615,9 +1708,6 @@
                     const temp = promptData[screen1];
                     promptData[screen1] = promptData[screen2];
                     promptData[screen2] = temp;
-
-                    // Save the updated prompts
-                    await savePromptFile();
 
                     showMessage('Images swapped successfully!', 'success');
                 } else {
@@ -1795,12 +1885,6 @@
             // Replace per-image prompts with the global prompt + style
             updateScreenPromptsFromMain();
 
-            // Save the prompt file FIRST before regenerating
-            await savePromptFile();
-
-            // Wait a bit to ensure the file is written
-            await new Promise(resolve => setTimeout(resolve, 100));
-
             showMessage('Regenerating all images...', 'success');
 
             // Show loading on all panels
@@ -1812,9 +1896,12 @@
                 // Regenerate each screen sequentially to avoid race conditions
                 const errors = [];
                 for (const screen of ['left', 'center', 'right']) {
+                    const screenPrompt = promptData[screen] || promptData.main;
                     const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate/${screen}`, {
                         credentials: 'same-origin',
-                        method: 'POST'
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ prompt: screenPrompt })
                     });
 
                     if (response.ok) {
@@ -1854,16 +1941,14 @@
                 // Get the current screen prompt (user may have edited it)
                 const screenPrompt = document.getElementById(`prompt-${screen}`).value.trim();
 
-                // Save the screen-specific prompt if it's been edited
-                if (screenPrompt !== promptData[screen]) {
-                    promptData[screen] = screenPrompt;
-                    await savePromptFile();
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                // Update prompt data in memory
+                promptData[screen] = screenPrompt;
 
                 const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/regenerate/${screen}`, {
                     credentials: 'same-origin',
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ prompt: screenPrompt })
                 });
 
                 if (response.ok) {
@@ -1882,45 +1967,6 @@
             }
         }
 
-        async function savePromptFile() {
-            try {
-                // Build prompt file content
-                let content = '';
-                if (promptData.style) content += `Style: ${promptData.style}\n`;
-                content += `Main prompt: ${promptData.main}\n`;
-                if (promptData.left) content += `Left: ${promptData.left}\n`;
-                if (promptData.center) content += `Center: ${promptData.center}\n`;
-                if (promptData.right) content += `Right: ${promptData.right}\n`;
-
-                console.log('Saving prompt file:', content);
-
-                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}/save-prompt`, {
-                    credentials: 'same-origin',
-                    method: 'POST',
-                    headers: {'Content-Type': 'text/plain'},
-                    body: content
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Error saving prompt:', errorText);
-                    showMessage('Error saving prompt file', 'error');
-                    throw new Error('Failed to save prompt file');
-                }
-
-                console.log('Prompt file saved successfully');
-                return true;
-            } catch (error) {
-                console.error('Error saving prompt:', error);
-                showMessage('Error: ' + error.message, 'error');
-                throw error;
-            }
-        }
-
-        // Debounced auto-save for prompt editing
-        let promptSaveTimeout = null;
-        let promptDirty = false;
-
         function handlePromptInput(field) {
             // Update promptData from the field
             const element = field === 'main'
@@ -1934,44 +1980,7 @@
                 : element.value.trim();
 
             promptData[field] = newValue;
-            promptDirty = true;
-
-            // Debounce the save (wait 1 second after last edit)
-            clearTimeout(promptSaveTimeout);
-            promptSaveTimeout = setTimeout(async () => {
-                try {
-                    await savePromptFile();
-                    promptDirty = false;
-                    console.log(`Auto-saved ${field} prompt`);
-                } catch (error) {
-                    console.error('Auto-save failed:', error);
-                }
-            }, 1000);
         }
-
-        // Save prompts before page unload if there are unsaved changes
-        window.addEventListener('beforeunload', (e) => {
-            if (promptDirty && promptSaveTimeout) {
-                // Clear the timeout and save immediately using sendBeacon for reliable async save
-                clearTimeout(promptSaveTimeout);
-
-                // Build prompt file content
-                let content = '';
-                if (promptData.style) content += `Style: ${promptData.style}\n`;
-                content += `Main prompt: ${promptData.main}\n`;
-                if (promptData.left) content += `Left: ${promptData.left}\n`;
-                if (promptData.center) content += `Center: ${promptData.center}\n`;
-                if (promptData.right) content += `Right: ${promptData.right}\n`;
-
-                // Use sendBeacon for reliable async save during page unload
-                const blob = new Blob([content], { type: 'text/plain' });
-                const url = `/asset-group/${encodeURIComponent(assetGroupName)}/save-prompt`;
-                navigator.sendBeacon(url, blob);
-
-                promptDirty = false;
-                console.log('Saved prompts before unload using sendBeacon');
-            }
-        });
 
         async function flipImage(screen) {
             const loadingOverlay = document.getElementById(`loading-${screen}`);
@@ -1984,10 +1993,10 @@
                 });
 
                 if (response.ok) {
-                    // Reload the image with cache-busting
+                    const data = await response.json();
+                    // Update image to show the new flipped version
                     const imgElement = document.getElementById(`img-${screen}`);
-                    const currentSrc = imgElement.src.split('?')[0];
-                    imgElement.src = `${currentSrc}?t=${Date.now()}`;
+                    imgElement.src = `/content/assets/${data.new_uuid}.png`;
                     showMessage(`${screen} image flipped successfully`, 'success');
                 } else {
                     showMessage(`Error flipping ${screen} image`, 'error');
@@ -2007,12 +2016,8 @@
                 // Get the screen prompt
                 const screenPrompt = document.getElementById(`prompt-${screen}`).value.trim();
 
-                // Save the screen-specific prompt if it's been edited
-                if (screenPrompt !== promptData[screen]) {
-                    promptData[screen] = screenPrompt;
-                    await savePromptFile();
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                // Update prompt data in memory
+                promptData[screen] = screenPrompt;
 
                 // Get the other two screens
                 const screens = ['left', 'center', 'right'];

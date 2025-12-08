@@ -2,6 +2,8 @@
 
 import re
 import pytest
+from pathlib import Path
+from PIL import Image
 from playwright.sync_api import Page, expect
 
 
@@ -181,6 +183,76 @@ def test_asset_group_controls_visible(page: Page, base_url: str):
 
     expect(duplicate_btn).to_be_visible()
     expect(delete_btn).to_be_visible()
+
+
+def test_drag_and_drop_image_upload(page: Page, base_url: str, tmp_path: Path):
+    """Test that dragging and dropping an image onto a frame uploads it as a new version."""
+    # Create a test image file
+    test_image_path = tmp_path / "test_upload.png"
+    img = Image.new('RGB', (100, 100), color='red')
+    img.save(test_image_path)
+
+    # Navigate to asset group page
+    test_name = "test_drag_drop_upload"
+    page.goto(f"{base_url}/asset_group.html?id={test_name}")
+    page.wait_for_load_state("networkidle")
+
+    # Track success messages
+    success_messages = []
+    def handle_console(msg):
+        if msg.type == "log" and "uploaded successfully" in msg.text.lower():
+            success_messages.append(msg.text)
+    page.on("console", handle_console)
+
+    # Get the initial image source for the left panel
+    left_img = page.locator("#img-left")
+    initial_src = left_img.get_attribute("src")
+
+    # Drag and drop the file onto the left panel
+    left_panel = page.locator("#panel-left")
+
+    # Use Playwright's file chooser to simulate drag and drop
+    # Note: We need to use the file input approach since true drag-and-drop from OS
+    # is not fully supported in headless browsers
+    with page.expect_file_chooser() as fc_info:
+        # Programmatically trigger the file drop
+        page.evaluate("""
+            (testImagePath) => {
+                fetch(testImagePath)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const file = new File([blob], 'test_upload.png', { type: 'image/png' });
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file);
+
+                        const dropEvent = new DragEvent('drop', {
+                            dataTransfer: dataTransfer,
+                            bubbles: true,
+                            cancelable: true
+                        });
+
+                        document.getElementById('panel-left').dispatchEvent(dropEvent);
+                    });
+            }
+        """, f"data:image/png;base64,{_image_to_base64(test_image_path)}")
+
+    # Wait for the upload to complete
+    page.wait_for_timeout(2000)
+
+    # Check for success message
+    message = page.locator("#message")
+    expect(message).to_contain_text("uploaded successfully", timeout=5000)
+
+    # Verify the image source changed (cache-busting query param should update)
+    new_src = left_img.get_attribute("src")
+    assert new_src != initial_src, "Image source should have changed after upload"
+
+
+def _image_to_base64(image_path: Path) -> str:
+    """Convert an image file to base64 string."""
+    import base64
+    with open(image_path, 'rb') as f:
+        return base64.b64encode(f.read()).decode('utf-8')
 
 
 # ========== Playlists Page Tests ==========

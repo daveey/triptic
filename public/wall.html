@@ -242,6 +242,32 @@
             background: #252542;
             color: #1df5d0;
         }
+
+        .center-url-display {
+            text-align: center;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .center-url-display label {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .center-url-display .url {
+            background: #1a1a2e;
+            color: #16e0bd;
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+            border: 1px solid #0f3460;
+        }
     </style>
 </head>
 <body>
@@ -307,6 +333,11 @@
                 <iframe id="iframe-right"></iframe>
             </div>
         </div>
+    </div>
+
+    <div class="center-url-display">
+        <label>Center Frame URL</label>
+        <div class="url" id="center-url">Loading...</div>
     </div>
 
     <div class="navigation-controls">
@@ -393,6 +424,42 @@
 
             // Update playlist info
             updatePlaylistInfo();
+
+            // Update center frame URL display
+            updateCenterFrameUrl(assetGroupName);
+        }
+
+        async function updateCenterFrameUrl(assetGroupName) {
+            const urlDisplay = document.getElementById('center-url');
+
+            if (!assetGroupName) {
+                urlDisplay.textContent = 'No asset group selected';
+                return;
+            }
+
+            try {
+                // Fetch asset group info to get center frame URL
+                const response = await fetch(`/asset-group/${encodeURIComponent(assetGroupName)}`, {
+                    credentials: 'same-origin'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    if (data.center && data.center.image_url) {
+                        // Construct the full URL
+                        const fullUrl = window.location.origin + data.center.image_url;
+                        urlDisplay.textContent = fullUrl;
+                    } else {
+                        urlDisplay.textContent = 'No center frame image available';
+                    }
+                } else {
+                    urlDisplay.textContent = 'Failed to load center frame URL';
+                }
+            } catch (err) {
+                console.error('[updateCenterFrameUrl] Error:', err);
+                urlDisplay.textContent = 'Error loading URL';
+            }
         }
 
         function navigateToAssetGroup() {
