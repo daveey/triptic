@@ -143,58 +143,87 @@
                 img.src = url + '?v=' + Date.now();
             }
 
-            function preloadAllImages(urls, callback) {
-                var loaded = 0;
+            function preloadImagesSequentially(urls, startIndex, callback) {
+                // Preload images one at a time, starting from startIndex and wrapping around
                 var total = urls.length;
-
                 if (total === 0) {
                     if (callback) callback();
                     return;
                 }
 
-                for (var i = 0; i < urls.length; i++) {
-                    preloadImage(urls[i], function() {
+                var loaded = 0;
+                var currentIdx = startIndex;
+
+                function loadNext() {
+                    if (loaded >= total) {
+                        if (callback) callback();
+                        return;
+                    }
+
+                    var url = urls[currentIdx];
+                    preloadImage(url, function() {
                         loaded++;
-                        if (loadingEl) {
+                        if (loadingEl && loadingEl.style.display !== 'none') {
                             loadingEl.textContent = 'Loading... ' + loaded + '/' + total;
                         }
-                        if (loaded >= total && callback) {
-                            callback();
-                        }
+                        // Move to next index, wrapping around
+                        currentIdx = (currentIdx + 1) % total;
+                        loadNext();
                     });
                 }
+
+                loadNext();
             }
 
             function loadImages() {
-                // Progressive loading: load thumbnails first for fast display
+                // Progressive loading: load current thumbnail first, then display
                 numImagesLoaded = 0;
+                var startIndex = getCurrentImageIndex();
 
-                // First, quickly preload thumbnails
-                preloadAllImages(thumbUrls, function() {
-                    loadingComplete = true;
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    // Copy thumb preloads to the thumb cache
-                    for (var i = 0; i < thumbUrls.length; i++) {
-                        if (preloadedImages[thumbUrls[i]]) {
-                            preloadedThumbs[thumbUrls[i]] = preloadedImages[thumbUrls[i]];
-                        }
-                    }
-                    displayImage();
-                    startUpdateTimer();
+                // First, load current thumbnail immediately
+                var currentThumb = thumbUrls[startIndex];
+                if (currentThumb) {
+                    preloadImage(currentThumb, function() {
+                        preloadedThumbs[currentThumb] = preloadedImages[currentThumb];
+                        loadingComplete = true;
+                        if (loadingEl) loadingEl.style.display = 'none';
+                        displayImage();
+                        startUpdateTimer();
 
-                    // Then preload full images in background
-                    preloadAllImages(imageUrls, function() {
-                        if (console && console.log) console.log('[LOAD] Full images preloaded');
-                        // If currently showing thumb, swap to full
-                        if (currentIsThumb && currentImageIndex >= 0) {
-                            var fullUrl = imageUrls[currentImageIndex];
-                            if (preloadedImages[fullUrl]) {
-                                setBackground(fullUrl);
+                        // Then load current full image
+                        var currentFull = imageUrls[startIndex];
+                        preloadImage(currentFull, function() {
+                            // Swap to full if still showing thumb
+                            if (currentIsThumb && currentImageIndex === startIndex) {
+                                setBackground(currentFull);
                                 currentIsThumb = false;
                             }
-                        }
+
+                            // Then preload remaining thumbs sequentially (starting from next)
+                            var nextIndex = (startIndex + 1) % thumbUrls.length;
+                            preloadImagesSequentially(thumbUrls, nextIndex, function() {
+                                // Copy all thumbs to cache
+                                for (var i = 0; i < thumbUrls.length; i++) {
+                                    if (preloadedImages[thumbUrls[i]]) {
+                                        preloadedThumbs[thumbUrls[i]] = preloadedImages[thumbUrls[i]];
+                                    }
+                                }
+                                if (console && console.log) console.log('[LOAD] All thumbnails preloaded');
+
+                                // Finally preload remaining full images sequentially
+                                preloadImagesSequentially(imageUrls, nextIndex, function() {
+                                    if (console && console.log) console.log('[LOAD] All full images preloaded');
+                                });
+                            });
+                        });
                     });
-                });
+                } else {
+                    // Fallback if no thumbs
+                    loadingComplete = true;
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    displayImage();
+                    startUpdateTimer();
+                }
             }
 
             function getCurrentImageIndex() {
