@@ -616,7 +616,9 @@
             ['left', 'center', 'right'].forEach(function(screen) {
                 const img = document.createElement('img');
                 img.className = 'triplet-thumbnail';
-                img.src = item[screen] || `/defaults/default_${screen}.png`;
+                // Use thumbnail if available, fallback to full image
+                const thumbKey = screen + '_thumb';
+                img.src = item[thumbKey] || item[screen] || `/defaults/default_${screen}.png`;
                 img.alt = screen;
                 img.onerror = function() {
                     this.src = `/defaults/default_${screen}.png`;
