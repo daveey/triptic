@@ -322,6 +322,15 @@
             </select>
         </label>
         <label>
+            Poll Frequency:
+            <select id="poll-interval">
+                <option value="500">0.5s</option>
+                <option value="1000" selected>1s</option>
+                <option value="2000">2s</option>
+                <option value="5000">5s</option>
+            </select>
+        </label>
+        <label>
             Playlist:
             <select id="playlist">
                 <option value="">Loading...</option>
@@ -435,6 +444,7 @@
         // Track initial load state
         let playlistLoaded = false;
         let frequencyLoaded = false;
+        let pollIntervalLoaded = false;
         let currentPlaylistAssetGroups = [];
         let currentAssetGroupIndex = -1;
         let currentAssetGroupName = '';
@@ -616,7 +626,11 @@
                 if (config.frequency) {
                     document.getElementById('frequency').value = config.frequency;
                 }
+                if (config.poll_interval) {
+                    document.getElementById('poll-interval').value = config.poll_interval;
+                }
                 frequencyLoaded = true;
+                pollIntervalLoaded = true;
             } catch (err) {
                 console.warn('Failed to load frequency:', err);
             }
@@ -780,6 +794,32 @@
             }
         }
 
+        async function updatePollInterval() {
+            // Don't auto-save during initial load
+            if (!pollIntervalLoaded) return;
+
+            const poll_interval = parseInt(document.getElementById('poll-interval').value);
+            try {
+                const response = await fetch('/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ poll_interval })
+                });
+                if (response.ok) {
+                    showSaveIndicator();
+                    // Reload screens to pick up new poll interval
+                    reloadScreens();
+                } else {
+                    console.error('Failed to update poll interval');
+                }
+            } catch (err) {
+                console.error('Failed to update poll interval:', err);
+            }
+        }
+
         // Image preloading for instant switching
         const preloadedImages = new Map();
         let preloadQueue = [];
@@ -854,6 +894,7 @@
         document.getElementById('scale').addEventListener('change', updateScreenSizes);
         document.getElementById('gap').addEventListener('change', updateScreenSizes);
         document.getElementById('frequency').addEventListener('change', updateFrequency);
+        document.getElementById('poll-interval').addEventListener('change', updatePollInterval);
         document.getElementById('playlist').addEventListener('change', updatePlaylist);
 
         // Initialize

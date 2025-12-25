@@ -53,9 +53,10 @@
         (function() {
             // Configuration
             var IMAGE_COUNT = 6;
-            var POLL_INTERVAL = 500; // ms - poll for changes frequently
+            var POLL_INTERVAL = 1000; // ms - poll for changes (loaded from config)
             var FREQUENCY_SECONDS = 60; // Default frequency in seconds
             var isPolling = false; // Prevent concurrent poll requests
+            var pollIntervalId = null; // Store interval ID to restart when config changes
 
             // Helper function for old browsers without URLSearchParams
             function getUrlParam(name) {
@@ -303,6 +304,11 @@
                         if (config.frequency) {
                             FREQUENCY_SECONDS = config.frequency;
                             if (console && console.log) console.log('Loaded frequency:', FREQUENCY_SECONDS, 'seconds');
+                        }
+
+                        if (config.poll_interval) {
+                            POLL_INTERVAL = config.poll_interval;
+                            if (console && console.log) console.log('Loaded poll_interval:', POLL_INTERVAL, 'ms');
                         }
 
                         if (playlist.items) {

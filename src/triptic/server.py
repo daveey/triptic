@@ -2891,7 +2891,8 @@ def update_screen_heartbeat(screen_id: str) -> None:
 def get_config() -> dict:
     """Get configuration from SQLite database."""
     return {
-        'frequency': db.get_setting_db('frequency', 60)  # Default to 60 seconds
+        'frequency': db.get_setting_db('frequency', 60),  # Default to 60 seconds
+        'poll_interval': db.get_setting_db('poll_interval', 1000)  # Default to 1000ms (1 second)
     }
 
 
@@ -2899,6 +2900,8 @@ def update_config(config: dict) -> None:
     """Update configuration in SQLite database."""
     if 'frequency' in config:
         db.set_setting_db('frequency', config['frequency'])
+    if 'poll_interval' in config:
+        db.set_setting_db('poll_interval', config['poll_interval'])
 
 
 def get_settings() -> dict:
