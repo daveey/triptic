@@ -170,7 +170,8 @@
 
         .image-panel img {
             width: 100%;
-            height: auto;
+            aspect-ratio: 9 / 16;
+            object-fit: cover;
             display: block;
         }
 
@@ -813,7 +814,7 @@
                                 leftPanel.style.cursor = 'grab';
                             }
                         };
-                        imgEl.src = `${data.left.image_url}?t=${timestamp}`;
+                        imgEl.src = `${data.left.thumb_url || data.left.image_url}?t=${timestamp}`;
                         if (data.left.local_path) {
                             imgEl.title = data.left.local_path;
                         }
@@ -855,7 +856,7 @@
                                 centerPanel.style.cursor = 'grab';
                             }
                         };
-                        imgEl.src = `${data.center.image_url}?t=${timestamp}`;
+                        imgEl.src = `${data.center.thumb_url || data.center.image_url}?t=${timestamp}`;
                         if (data.center.local_path) {
                             imgEl.title = data.center.local_path;
                         }
@@ -897,7 +898,7 @@
                                 rightPanel.style.cursor = 'grab';
                             }
                         };
-                        imgEl.src = `${data.right.image_url}?t=${timestamp}`;
+                        imgEl.src = `${data.right.thumb_url || data.right.image_url}?t=${timestamp}`;
                         if (data.right.local_path) {
                             imgEl.title = data.right.local_path;
                         }
@@ -1745,13 +1746,16 @@
                 });
 
                 if (response.ok) {
-                    // Reload the image with cache-busting
+                    const data = await response.json();
+                    // Use the new image URL from the response
                     const imgElement = document.getElementById(`img-${screen}`);
-                    const currentSrc = imgElement.src.split('?')[0];
-                    imgElement.src = `${currentSrc}?t=${Date.now()}`;
+                    imgElement.src = `${data.image_url}?t=${Date.now()}`;
                     showMessage(`${screen} image uploaded successfully`, 'success');
+                    // Reload versions to show new version
+                    await loadVersions();
                 } else {
-                    showMessage(`Error uploading ${screen} image`, 'error');
+                    const errorText = await response.text();
+                    showMessage(`Error uploading ${screen} image: ${errorText}`, 'error');
                 }
             } catch (error) {
                 showMessage('Error: ' + error.message, 'error');

@@ -255,17 +255,18 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
         Protected paths:
         - Management pages: /wall.html, /playlists.html, /settings.html, /asset_group.html
-        - API endpoints (except heartbeat)
+        - API endpoints (except those needed by screen views)
 
         Unprotected paths:
         - Screen views: / and index.html (with or without ?id= parameter)
-        - Static assets: /content/*, /shared/*
+        - Static assets: /content/*, /shared/*, /defaults/*
+        - Screen APIs: /config, /playlist, /heartbeat/*
         """
         # Parse the path without query string
         parsed_path = urllib.parse.urlparse(path).path
 
-        # Allow screen view (index.html and root)
-        if parsed_path in ['/', '/index.html', '']:
+        # Allow screen view (index.html, test.html, and root)
+        if parsed_path in ['/', '/index.html', '/test.html', '']:
             return False
 
         # Allow static assets
@@ -278,6 +279,10 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
         # Allow heartbeat endpoint (for screen health monitoring)
         if parsed_path.startswith('/heartbeat/'):
+            return False
+
+        # Allow config and playlist endpoints (needed by screen view)
+        if parsed_path in ['/config', '/playlist']:
             return False
 
         # Everything else requires auth
@@ -458,6 +463,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_fluff_plus_prompt()
         elif self.path == '/prompt/diff-single':
             self._handle_diff_single_prompt()
+        elif self.path == '/admin/generate-thumbnails':
+            self._handle_generate_thumbnails()
         else:
             self._send_json_error(404, "Not found")
 
@@ -540,6 +547,52 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             logging.info(f"Settings updated: model={data.get('model', 'N/A')}")
         except Exception as e:
             self.send_error(500, f"Error updating settings: {e}")
+
+    def _handle_generate_thumbnails(self) -> None:
+        """Generate thumbnails for all existing images that don't have them."""
+        try:
+            from . import storage
+            assets_dir = storage.get_assets_dir()
+
+            # Find all PNG images that don't have _thumb suffix
+            images = list(assets_dir.glob("*.png"))
+            images = [p for p in images if not p.stem.endswith("_thumb")]
+
+            created = 0
+            skipped = 0
+            failed = 0
+
+            for img_path in images:
+                content_uuid = img_path.stem
+                thumb_path = assets_dir / f"{content_uuid}_thumb.png"
+
+                if thumb_path.exists():
+                    skipped += 1
+                    continue
+
+                result = storage.create_thumbnail(content_uuid, img_path)
+                if result:
+                    created += 1
+                else:
+                    failed += 1
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            response = json.dumps({
+                'status': 'ok',
+                'created': created,
+                'skipped': skipped,
+                'failed': failed,
+                'total': len(images)
+            })
+            self.wfile.write(response.encode())
+            logging.info(f"Generated thumbnails: created={created}, skipped={skipped}, failed={failed}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._send_json_error(500, f"Error generating thumbnails: {e}")
 
     def _handle_get_video_models(self) -> None:
         """Get available video generation models from Gemini API."""
@@ -963,36 +1016,42 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(500, f"Error getting current asset group: {e}")
 
     def _handle_set_current_asset_group(self) -> None:
-        """Set current asset group override (new endpoint name)."""
+        """Set current asset group override (new endpoint name). Pass empty/null to clear."""
         try:
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length)
             data = json.loads(body.decode())
             # Accept both 'asset_group' and 'imageset' keys
             asset_group = data.get('asset_group') or data.get('imageset')
-            if not asset_group:
-                self.send_error(400, "Missing asset_group name")
-                return
 
             # Store the current asset group override in state
             state = read_state()
             old_asset_group = state.get('current_imageset_override')
-            state['current_imageset_override'] = asset_group
+
+            if asset_group:
+                state['current_imageset_override'] = asset_group
+            else:
+                # Clear the override if empty/null
+                state.pop('current_imageset_override', None)
+
             write_state(state)
 
-            logging.info(f"[MUTATION] Set current asset group: '{old_asset_group}' -> '{asset_group}'")
+            if asset_group:
+                logging.info(f"[MUTATION] Set current asset group: '{old_asset_group}' -> '{asset_group}'")
+            else:
+                logging.info(f"[MUTATION] Cleared current asset group override (was: '{old_asset_group}')")
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            response = json.dumps({'status': 'ok', 'asset_group': asset_group})
+            response = json.dumps({'status': 'ok', 'asset_group': asset_group, 'cleared': not asset_group})
             self.wfile.write(response.encode())
         except Exception as e:
             import traceback
-            logging.error(f"[MUTATION] Set current imageset failed: {e}")
+            logging.error(f"[MUTATION] Set current asset group failed: {e}")
             logging.error(traceback.format_exc())
-            self.send_error(500, f"Error setting current imageset: {e}")
+            self.send_error(500, f"Error setting current asset group: {e}")
 
     def _handle_create_playlist(self) -> None:
         """Create a new empty playlist."""
@@ -1338,6 +1397,9 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             # Generate the image
             generate_image_with_gemini(prompt, output_path, screen)
 
+            # Create thumbnail
+            storage.create_thumbnail(content_uuid, output_path)
+
             # Create version and add to asset
             version = AssetVersion(
                 content=content_uuid,
@@ -1363,16 +1425,17 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json_error(500, f"Error regenerating image: {e}")
 
     def _handle_regenerate_with_context(self) -> None:
-        """Regenerate an image using the other two images as context."""
+        """Regenerate an image using the other two images as context, creating a new version."""
         try:
-            # Parse path: /imageset/{name}/regenerate-with-context/{screen}
             from urllib.parse import unquote
+            from . import storage
+
             path_parts = self.path.split('/')
-            imageset_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
+            asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
             screen = path_parts[4] if len(path_parts) > 4 else None
 
-            if not imageset_name or not screen:
-                self.send_error(400, "Missing imageset name or screen")
+            if not asset_group_name or not screen:
+                self.send_error(400, "Missing asset group name or screen")
                 return
 
             if screen not in ['left', 'center', 'right']:
@@ -1389,64 +1452,91 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(400, "Expected exactly 2 context screens")
                 return
 
-            # Get the prompt from the database
-            asset_group = get_asset_group(imageset_name)
+            # Get asset group from database
+            asset_group = get_asset_group(asset_group_name)
             if not asset_group:
-                self.send_error(404, f"Asset group '{imageset_name}' not found")
+                self.send_error(404, f"Asset group '{asset_group_name}' not found")
                 return
 
             screen_asset = getattr(asset_group, screen)
-            if not screen_asset.versions:
-                self.send_error(400, f"No versions found for {imageset_name}/{screen}")
+            current_version = screen_asset.get_current_version()
+            if not current_version:
+                self.send_error(400, f"No current version found for {asset_group_name}/{screen}")
                 return
 
-            prompt = screen_asset.versions[-1].prompt
+            prompt = current_version.prompt
             if not prompt:
-                self.send_error(400, f"No prompt found for {imageset_name}/{screen}")
+                self.send_error(400, f"No prompt found for {asset_group_name}/{screen}")
                 return
 
-            # Get paths to context images
+            # Get paths to context images using UUID-based storage
             context_images = {}
             for ctx_screen in context_screens:
-                ctx_path = get_imageset_image_path(imageset_name, ctx_screen)
+                ctx_asset = getattr(asset_group, ctx_screen)
+                ctx_version = ctx_asset.get_current_version()
+                if not ctx_version:
+                    self.send_error(404, f"No current version for context screen {ctx_screen}")
+                    return
+                ctx_path = storage.get_file_path(ctx_version.content)
                 if not ctx_path or not ctx_path.exists():
-                    self.send_error(404, f"Context image not found for {ctx_screen}")
+                    self.send_error(404, f"Context image file not found for {ctx_screen}")
                     return
                 context_images[ctx_screen] = ctx_path
 
-            # Get output path
-            output_path = get_imageset_image_path(imageset_name, screen)
-            if not output_path:
-                self.send_error(404, "Imageset not found")
-                return
-
-            # Create backup before regenerating
-            create_image_backup(output_path)
+            # Generate new UUID for output
+            new_uuid = storage.generate_uuid()
+            assets_dir = storage.get_assets_dir()
+            output_path = assets_dir / f"{new_uuid}.png"
 
             # Regenerate with context
             from triptic.imgen import generate_image_with_context
             generate_image_with_context(prompt, output_path, screen, context_images)
 
+            # Create thumbnail
+            storage.create_thumbnail(new_uuid, output_path)
+
+            # Create new version
+            new_version = AssetVersion(
+                version_uuid=new_uuid,
+                content=new_uuid,
+                prompt=prompt,
+                timestamp=datetime.now().isoformat()
+            )
+            screen_asset.add_version(new_version, set_as_current=True)
+
+            # Save to database
+            save_asset_group(asset_group)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            response = json.dumps({'status': 'ok', 'regenerated': screen, 'with_context': context_screens})
+            response = json.dumps({
+                'status': 'ok',
+                'regenerated': screen,
+                'with_context': context_screens,
+                'new_uuid': new_uuid
+            })
             self.wfile.write(response.encode())
+
+            logging.info(f"Regenerated {screen} with context for '{asset_group_name}', created version {new_uuid}")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             self.send_error(500, f"Error regenerating image with context: {e}")
 
     def _handle_edit_image(self) -> None:
-        """Edit an image using Gemini's edit_image API."""
+        """Edit an image using Gemini's edit_image API, creating a new version."""
         try:
-            # Parse path: /imageset/{name}/edit/{screen}
             from urllib.parse import unquote
+            from . import storage
+
             path_parts = self.path.split('/')
-            imageset_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
+            asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
             screen = path_parts[4] if len(path_parts) > 4 else None
 
-            if not imageset_name or not screen:
-                self.send_error(400, "Missing imageset name or screen")
+            if not asset_group_name or not screen:
+                self.send_error(400, "Missing asset group name or screen")
                 return
 
             if screen not in ['left', 'center', 'right']:
@@ -1463,41 +1553,81 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(400, "Missing edit prompt")
                 return
 
-            # Get the current image path
-            output_path = get_imageset_image_path(imageset_name, screen)
-            if not output_path or not output_path.exists():
-                self.send_error(404, "Image not found")
+            # Get asset group from database
+            asset_group = get_asset_group(asset_group_name)
+            if not asset_group:
+                self.send_error(404, f"Asset group '{asset_group_name}' not found")
                 return
 
-            # Create backup before editing
-            create_image_backup(output_path)
+            # Get the current version's image path
+            screen_asset = getattr(asset_group, screen)
+            current_version = screen_asset.get_current_version()
+            if not current_version:
+                self.send_error(404, f"No current version for {screen}")
+                return
 
-            # Edit the image
+            source_path = storage.get_file_path(current_version.content)
+            if not source_path or not source_path.exists():
+                self.send_error(404, "Source image file not found")
+                return
+
+            # Generate new UUID for edited image
+            new_uuid = storage.generate_uuid()
+            assets_dir = storage.get_assets_dir()
+            output_path = assets_dir / f"{new_uuid}.png"
+
+            # Edit the image (source -> output)
             from triptic.imgen import edit_image_with_gemini
-            edit_image_with_gemini(edit_prompt, output_path, output_path)
+            edit_image_with_gemini(edit_prompt, source_path, output_path)
+
+            # Create thumbnail
+            storage.create_thumbnail(new_uuid, output_path)
+
+            # Create new version with combined prompt
+            combined_prompt = f"{current_version.prompt}\n[Edit: {edit_prompt}]" if current_version.prompt else edit_prompt
+            new_version = AssetVersion(
+                version_uuid=new_uuid,
+                content=new_uuid,
+                prompt=combined_prompt,
+                timestamp=datetime.now().isoformat()
+            )
+            screen_asset.add_version(new_version, set_as_current=True)
+
+            # Save to database
+            save_asset_group(asset_group)
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            response = json.dumps({'status': 'ok', 'edited': screen})
+            response = json.dumps({
+                'status': 'ok',
+                'edited': screen,
+                'new_uuid': new_uuid,
+                'image_url': f'/content/assets/{new_uuid}.png'
+            })
             self.wfile.write(response.encode())
+
+            logging.info(f"Edited {screen} image for '{asset_group_name}', created version {new_uuid}")
         except Exception as e:
             import traceback
             traceback.print_exc()
             self.send_error(500, f"Error editing image: {e}")
 
     def _handle_upload_image(self) -> None:
-        """Upload a replacement image for a screen."""
+        """Upload an image for a screen, creating a new version."""
         try:
-            # Parse path: /imageset/{name}/upload/{screen}
             from urllib.parse import unquote
+            import uuid
+            from . import storage
+
+            # Parse path: /asset-group/{name}/upload/{screen}
             path_parts = self.path.split('/')
-            imageset_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
+            asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
             screen = path_parts[4] if len(path_parts) > 4 else None
 
-            if not imageset_name or not screen:
-                self.send_error(400, "Missing imageset name or screen")
+            if not asset_group_name or not screen:
+                self.send_error(400, "Missing asset group name or screen")
                 return
 
             if screen not in ['left', 'center', 'right']:
@@ -1508,53 +1638,97 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             content_length = int(self.headers.get('Content-Length', 0))
             image_data = self.rfile.read(content_length)
 
-            # Get the output path
-            output_path = get_imageset_image_path(imageset_name, screen)
-            if not output_path:
-                self.send_error(404, "Imageset not found")
+            if not image_data:
+                self.send_error(400, "No image data received")
                 return
 
-            # Create backup before uploading
-            if output_path.exists():
-                create_image_backup(output_path)
+            # Get or create asset group from database
+            asset_group = get_asset_group(asset_group_name)
+            if not asset_group:
+                # Create new asset group if it doesn't exist
+                asset_group = AssetGroup(id=asset_group_name)
+
+            # Create a new UUID for the uploaded image
+            new_uuid = str(uuid.uuid4())
+            assets_dir = storage.get_assets_dir()
+            new_path = assets_dir / f"{new_uuid}.png"
 
             # Save the uploaded image
-            output_path.write_bytes(image_data)
+            new_path.write_bytes(image_data)
+
+            # Create thumbnail
+            storage.create_thumbnail_from_bytes(new_uuid, image_data)
+
+            # Create a new version for the screen
+            screen_asset = getattr(asset_group, screen)
+            new_version = AssetVersion(
+                version_uuid=new_uuid,
+                content=new_uuid,
+                prompt="Uploaded image",
+                timestamp=datetime.now().isoformat()
+            )
+            screen_asset.add_version(new_version, set_as_current=True)
+
+            # Save to database
+            save_asset_group(asset_group)
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            response = json.dumps({'status': 'ok', 'uploaded': screen})
+            response = json.dumps({
+                'status': 'ok',
+                'uploaded': screen,
+                'new_uuid': new_uuid,
+                'image_url': f'/content/assets/{new_uuid}.png'
+            })
             self.wfile.write(response.encode())
+
+            logging.info(f"Uploaded image to {screen} for '{asset_group_name}', created version {new_uuid}")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             self.send_error(500, f"Error uploading image: {e}")
 
     def _handle_generate_video(self) -> None:
         """Generate a video from an image using Google Veo API (async)."""
         try:
-            # Parse path: /imageset/{name}/video/{screen}
             from urllib.parse import unquote
+            from . import storage
+
             path_parts = self.path.split('/')
-            imageset_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
+            asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
             screen = path_parts[4] if len(path_parts) > 4 else None
 
-            if not imageset_name or not screen:
-                self.send_error(400, "Missing imageset name or screen")
+            if not asset_group_name or not screen:
+                self.send_error(400, "Missing asset group name or screen")
                 return
 
             if screen not in ['left', 'center', 'right']:
                 self.send_error(400, "Invalid screen name")
                 return
 
-            # Get the image path
-            image_path = get_imageset_image_path(imageset_name, screen)
-            if not image_path or not image_path.exists():
-                self.send_error(404, "Image not found")
+            # Get asset group from database
+            asset_group = get_asset_group(asset_group_name)
+            if not asset_group:
+                self.send_error(404, f"Asset group '{asset_group_name}' not found")
                 return
 
-            # Determine video output path (same directory as image, .mp4 extension)
-            video_path = image_path.with_suffix('.mp4')
+            # Get the current version's image path
+            screen_asset = getattr(asset_group, screen)
+            current_version = screen_asset.get_current_version()
+            if not current_version:
+                self.send_error(404, f"No current version for {screen}")
+                return
+
+            image_path = storage.get_file_path(current_version.content)
+            if not image_path or not image_path.exists():
+                self.send_error(404, "Image file not found")
+                return
+
+            # Determine video output path (use same UUID with .mp4 extension)
+            assets_dir = storage.get_assets_dir()
+            video_path = assets_dir / f"{current_version.content}.mp4"
 
             # Create a unique job ID for this video generation
             import uuid
@@ -1563,13 +1737,13 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             # Store job status
             video_jobs[job_id] = {
                 'status': 'processing',
-                'imageset': imageset_name,
+                'asset_group': asset_group_name,
                 'screen': screen,
                 'video_path': video_path,
                 'error': None
             }
 
-            logging.info(f"Starting async video generation for {imageset_name} {screen} screen (job: {job_id})")
+            logging.info(f"Starting async video generation for {asset_group_name} {screen} screen (job: {job_id})")
 
             # Start video generation in background thread
             import threading
@@ -1828,6 +2002,9 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             new_path = assets_dir / f"{new_uuid}{image_path.suffix}"
             flipped.save(new_path)
 
+            # Create thumbnail
+            storage.create_thumbnail(new_uuid, new_path)
+
             # Copy the prompt from the flipped version
             prompt = current_version.prompt if current_version else ""
 
@@ -2012,18 +2189,15 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json_error(500, f"Error deleting image version: {str(e)}")
 
     def _handle_swap_images(self) -> None:
-        """Swap two images in an imageset."""
+        """Swap current versions between two screens."""
         try:
-            # Parse path: /imageset/{name}/swap
             from urllib.parse import unquote
-            import shutil
-            import tempfile
 
             path_parts = self.path.split('/')
-            imageset_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
+            asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
 
-            if not imageset_name:
-                self.send_error(400, "Missing imageset name")
+            if not asset_group_name:
+                self.send_error(400, "Missing asset group name")
                 return
 
             # Read request body to get the two screens to swap
@@ -2045,30 +2219,39 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(400, "Cannot swap the same screen")
                 return
 
-            # Get the image paths
-            image_path1 = get_imageset_image_path(imageset_name, screen1)
-            image_path2 = get_imageset_image_path(imageset_name, screen2)
-
-            if not image_path1 or not image_path1.exists():
-                self.send_error(404, f"Image not found for {screen1}")
+            # Get asset group from database
+            asset_group = get_asset_group(asset_group_name)
+            if not asset_group:
+                self.send_error(404, f"Asset group '{asset_group_name}' not found")
                 return
 
-            if not image_path2 or not image_path2.exists():
-                self.send_error(404, f"Image not found for {screen2}")
+            # Get current versions for both screens
+            asset1 = getattr(asset_group, screen1)
+            asset2 = getattr(asset_group, screen2)
+
+            version1 = asset1.get_current_version()
+            version2 = asset2.get_current_version()
+
+            if not version1:
+                self.send_error(404, f"No current version for {screen1}")
                 return
 
-            # Create backups before swapping
-            create_image_backup(image_path1)
-            create_image_backup(image_path2)
+            if not version2:
+                self.send_error(404, f"No current version for {screen2}")
+                return
 
-            # Swap the images using a temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
-                tmp_path = Path(tmp.name)
+            # Swap the current_version_uuid pointers
+            temp_uuid = asset1.current_version_uuid
+            asset1.current_version_uuid = asset2.current_version_uuid
+            asset2.current_version_uuid = temp_uuid
 
-            shutil.copy2(image_path1, tmp_path)
-            shutil.copy2(image_path2, image_path1)
-            shutil.copy2(tmp_path, image_path2)
-            tmp_path.unlink()
+            # Also swap the version lists so each screen has its own history
+            temp_versions = asset1.versions
+            asset1.versions = asset2.versions
+            asset2.versions = temp_versions
+
+            # Save to database
+            save_asset_group(asset_group)
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -2076,23 +2259,27 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             response = json.dumps({'status': 'ok', 'swapped': [screen1, screen2]})
             self.wfile.write(response.encode())
+
+            logging.info(f"Swapped {screen1} and {screen2} for '{asset_group_name}'")
         except Exception as e:
             import traceback
             traceback.print_exc()
             self.send_error(500, f"Error swapping images: {e}")
 
     def _handle_copy_image(self) -> None:
-        """Copy an image from one screen to another in an imageset."""
+        """Copy an image from one screen to another, creating a new version."""
         try:
-            # Parse path: /imageset/{name}/copy
             from urllib.parse import unquote
             import shutil
+            import uuid
+            from . import storage
 
+            # Parse path: /asset-group/{name}/copy
             path_parts = self.path.split('/')
-            imageset_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
+            asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
 
-            if not imageset_name:
-                self.send_error(400, "Missing imageset name")
+            if not asset_group_name:
+                self.send_error(400, "Missing asset group name")
                 return
 
             # Read request body to get source and target screens
@@ -2114,31 +2301,67 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(400, "Cannot copy to the same screen")
                 return
 
-            # Get the image paths
-            source_path = get_imageset_image_path(imageset_name, source_screen)
-            target_path = get_imageset_image_path(imageset_name, target_screen)
+            # Get asset group from database
+            asset_group = get_asset_group(asset_group_name)
+            if not asset_group:
+                self.send_error(404, f"Asset group '{asset_group_name}' not found")
+                return
+
+            # Get the source screen asset and find current version
+            source_asset = getattr(asset_group, source_screen)
+            if not source_asset or not source_asset.versions:
+                self.send_error(404, f"No image found for {source_screen}")
+                return
+
+            # Find the current version of the source
+            source_version = source_asset.get_current_version()
+            if not source_version:
+                self.send_error(404, f"No current version for {source_screen}")
+                return
+
+            source_content_uuid = source_version.content
+            source_path = storage.get_file_path(source_content_uuid)
 
             if not source_path or not source_path.exists():
-                self.send_error(404, f"Source image not found for {source_screen}")
+                self.send_error(404, f"Source image file not found for {source_screen}")
                 return
 
-            if not target_path:
-                self.send_error(404, f"Target path not found for {target_screen}")
-                return
+            # Create a new UUID for the copied image
+            new_uuid = str(uuid.uuid4())
+            assets_dir = storage.get_assets_dir()
+            new_path = assets_dir / f"{new_uuid}{source_path.suffix}"
 
-            # Create backup before copying
-            if target_path.exists():
-                create_image_backup(target_path)
+            # Copy the image file
+            shutil.copy2(source_path, new_path)
 
-            # Copy the image
-            shutil.copy2(source_path, target_path)
+            # Create thumbnail
+            storage.create_thumbnail(new_uuid, new_path)
+
+            # Create a new version for the target screen
+            target_asset = getattr(asset_group, target_screen)
+            new_version = AssetVersion(
+                version_uuid=new_uuid,
+                content=new_uuid,
+                prompt=source_version.prompt,  # Copy the prompt from source
+                timestamp=datetime.now().isoformat()
+            )
+            target_asset.add_version(new_version, set_as_current=True)
+
+            # Save to database
+            save_asset_group(asset_group)
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            response = json.dumps({'status': 'ok', 'copied': {'source': source_screen, 'target': target_screen}})
+            response = json.dumps({
+                'status': 'ok',
+                'copied': {'source': source_screen, 'target': target_screen},
+                'new_uuid': new_uuid
+            })
             self.wfile.write(response.encode())
+
+            logging.info(f"Copied {source_screen} to {target_screen} for '{asset_group_name}', created version {new_uuid}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -2866,15 +3089,20 @@ def get_playlist_items(playlist_name: str = None) -> list:
                         if content_uuid and not content_uuid.startswith('img/'):
                             # UUID-based path (no version suffix needed)
                             item[screen] = f"/content/assets/{content_uuid}.png"
+                            # Add thumbnail URL
+                            item[f"{screen}_thumb"] = f"/content/assets/{content_uuid}_thumb.png"
                         else:
                             # Fallback
                             item[screen] = f"/img/{screen}/{asset_group_name}.png"
+                            item[f"{screen}_thumb"] = f"/img/{screen}/{asset_group_name}.png"
                     else:
                         # No current version - use placeholder
                         item[screen] = f"/img/{screen}/{asset_group_name}.png"
+                        item[f"{screen}_thumb"] = f"/img/{screen}/{asset_group_name}.png"
                 else:
                     # No versions - use placeholder
                     item[screen] = f"/img/{screen}/{asset_group_name}.png"
+                    item[f"{screen}_thumb"] = f"/img/{screen}/{asset_group_name}.png"
 
             result.append(item)
         else:

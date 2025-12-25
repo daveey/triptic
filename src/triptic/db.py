@@ -317,6 +317,7 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                 # Build image URL for current version
                 local_path = None
                 image_url = ""
+                thumb_url = ""
                 video_url = None
                 if content_uuid and not content_uuid.startswith('img/'):
                     # Check if file exists, otherwise use default
@@ -324,6 +325,7 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                     if file_path and file_path.exists():
                         # File exists, use it
                         image_url = f"/content/assets/{content_uuid}.png"
+                        thumb_url = f"/content/assets/{content_uuid}_thumb.png"
                         local_path = str(file_path)
 
                         # Check if video version exists
@@ -340,15 +342,18 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                         default_uuid = default_uuids.get(screen)
                         if default_uuid:
                             image_url = f"/content/assets/{default_uuid}.png"
+                            thumb_url = f"/content/assets/{default_uuid}_thumb.png"
                             local_path = str(storage.get_assets_dir() / f"{default_uuid}.png")
                 else:
                     # Fallback
                     image_url = f"/img/{screen}/{asset_group_id}.png"
+                    thumb_url = f"/img/{screen}/{asset_group_id}.png"
 
                 result[screen] = {
                     'versions': versions,
                     'current_version_uuid': current_version_uuid,
                     'image_url': image_url,
+                    'thumb_url': thumb_url,
                     'video_url': video_url,
                     'local_path': local_path
                 }
@@ -362,15 +367,18 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
                 default_uuid = default_uuids.get(screen)
                 if default_uuid:
                     image_url = f"/content/assets/{default_uuid}.png"
+                    thumb_url = f"/content/assets/{default_uuid}_thumb.png"
                     local_path = str(storage.get_assets_dir() / f"{default_uuid}.png")
                 else:
                     image_url = ''
+                    thumb_url = ''
                     local_path = None
 
                 result[screen] = {
                     'versions': [],
                     'current_version_uuid': None,
                     'image_url': image_url,
+                    'thumb_url': thumb_url,
                     'local_path': local_path
                 }
 

@@ -52,167 +52,370 @@
     <script>
         (function() {
             // Configuration
-            const IMAGE_COUNT = 6;
-            const POLL_INTERVAL = 100; // ms for loading check
-            let FREQUENCY_SECONDS = 60; // Default frequency in seconds
+            var IMAGE_COUNT = 6;
+            var POLL_INTERVAL = 500; // ms - poll for changes frequently
+            var FREQUENCY_SECONDS = 60; // Default frequency in seconds
+            var isPolling = false; // Prevent concurrent poll requests
+
+            // Helper function for old browsers without URLSearchParams
+            function getUrlParam(name) {
+                var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+                return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+            }
 
             // State
             // Check for ?id=X parameter, fallback to hash, or redirect to dashboard
-            const urlParams = new URLSearchParams(window.location.search);
-            let screenId = urlParams.get('id') || document.URL.split("#")[1] || "";
+            var screenId = getUrlParam('id') || document.URL.split("#")[1] || "";
 
             // If no screen ID specified, redirect to dashboard
             if (!screenId) {
                 window.location.href = '/dashboard.html';
             }
-            let imageUrls = [];
-            let images = [];
-            let numImagesLoaded = 0;
-            let loadingComplete = false;
-            let currentImageIndex = -1;
-            let updateInterval = null;
+            var imageUrls = [];
+            var thumbUrls = []; // Thumbnail URLs for faster initial loading
+            var images = [];
+            var preloadedImages = {}; // Cache of preloaded Image objects by URL
+            var preloadedThumbs = {}; // Cache of preloaded thumbnail objects
+            var numImagesLoaded = 0;
+            var loadingComplete = false;
+            var currentImageIndex = -1;
+            var currentDisplayedUrl = null; // Track what's currently shown
+            var currentIsThumb = false; // Track if currently showing thumbnail
+            var updateInterval = null;
 
             // DOM elements
-            const displayEl = document.getElementById('display');
-            const loadingEl = document.getElementById('loading');
-            const errorEl = document.getElementById('error');
+            var displayEl = document.getElementById('display');
+            var loadingEl = document.getElementById('loading');
+            var errorEl = document.getElementById('error');
+
+            function getBaseUrl(url) {
+                // Strip cache buster to compare base URLs
+                return url ? url.split('?')[0] : '';
+            }
 
             function buildImageUrls(playlistItems) {
-                imageUrls = [];
-                const cacheBuster = '?v=' + Date.now();
+                var newUrls = [];
+                var newThumbs = [];
                 if (playlistItems && playlistItems.length > 0) {
-                    // Load from playlist
-                    playlistItems.forEach(function(item) {
-                        const url = item[screenId] || item['center'] || '';
+                    // Load from playlist - no cache buster, we use preloading
+                    for (var i = 0; i < playlistItems.length; i++) {
+                        var item = playlistItems[i];
+                        var url = item[screenId] || item['center'] || '';
+                        var thumbKey = screenId + '_thumb';
+                        var thumbUrl = item[thumbKey] || item['center_thumb'] || url;
                         if (url) {
-                            imageUrls.push(url + cacheBuster);
+                            newUrls.push(url);
+                            newThumbs.push(thumbUrl);
                         }
-                    });
+                    }
                 } else {
                     // Fallback to old behavior
-                    const basePath = screenId ? `img/${screenId}/` : 'img/';
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const ext = urlParams.get('ext') || 'svg';
-                    for (let i = 1; i <= IMAGE_COUNT; i++) {
-                        imageUrls.push(basePath + i + '.' + ext + cacheBuster);
+                    var basePath = screenId ? 'img/' + screenId + '/' : 'img/';
+                    var ext = getUrlParam('ext') || 'svg';
+                    for (var j = 1; j <= IMAGE_COUNT; j++) {
+                        newUrls.push(basePath + j + '.' + ext);
+                        newThumbs.push(basePath + j + '.' + ext);
                     }
+                }
+                thumbUrls = newThumbs;
+                return newUrls;
+            }
+
+            function preloadImage(url, callback) {
+                // Check if already preloaded
+                if (preloadedImages[url]) {
+                    if (callback) callback(preloadedImages[url]);
+                    return;
+                }
+
+                var img = new Image();
+                img.onload = function() {
+                    preloadedImages[url] = img;
+                    if (callback) callback(img);
+                };
+                img.onerror = function() {
+                    if (console && console.warn) console.warn('Failed to preload image:', url);
+                    // Still cache it to avoid repeated failed requests
+                    preloadedImages[url] = img;
+                    if (callback) callback(img);
+                };
+                // Add cache buster for fresh fetch
+                img.src = url + '?v=' + Date.now();
+            }
+
+            function preloadAllImages(urls, callback) {
+                var loaded = 0;
+                var total = urls.length;
+
+                if (total === 0) {
+                    if (callback) callback();
+                    return;
+                }
+
+                for (var i = 0; i < urls.length; i++) {
+                    preloadImage(urls[i], function() {
+                        loaded++;
+                        if (loadingEl) {
+                            loadingEl.textContent = 'Loading... ' + loaded + '/' + total;
+                        }
+                        if (loaded >= total && callback) {
+                            callback();
+                        }
+                    });
                 }
             }
 
             function loadImages() {
-                // imageUrls should already be built by buildImageUrls() before calling this
+                // Progressive loading: load thumbnails first for fast display
                 numImagesLoaded = 0;
 
-                imageUrls.forEach(function(url, index) {
-                    const img = new Image();
-                    img.onload = function() {
-                        numImagesLoaded++;
-                        updateLoadingProgress();
-                    };
-                    img.onerror = function() {
-                        // Still count it to avoid infinite waiting
-                        numImagesLoaded++;
-                        console.warn('Failed to load image:', url);
-                        updateLoadingProgress();
-                    };
-                    img.src = url;
-                    images[index] = img;
+                // First, quickly preload thumbnails
+                preloadAllImages(thumbUrls, function() {
+                    loadingComplete = true;
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    // Copy thumb preloads to the thumb cache
+                    for (var i = 0; i < thumbUrls.length; i++) {
+                        if (preloadedImages[thumbUrls[i]]) {
+                            preloadedThumbs[thumbUrls[i]] = preloadedImages[thumbUrls[i]];
+                        }
+                    }
+                    displayImage();
+                    startUpdateTimer();
+
+                    // Then preload full images in background
+                    preloadAllImages(imageUrls, function() {
+                        if (console && console.log) console.log('[LOAD] Full images preloaded');
+                        // If currently showing thumb, swap to full
+                        if (currentIsThumb && currentImageIndex >= 0) {
+                            var fullUrl = imageUrls[currentImageIndex];
+                            if (preloadedImages[fullUrl]) {
+                                setBackground(fullUrl);
+                                currentIsThumb = false;
+                            }
+                        }
+                    });
                 });
             }
 
-            function updateLoadingProgress() {
-                const expectedCount = imageUrls.length || IMAGE_COUNT;
-                loadingEl.textContent = 'Loading... ' + numImagesLoaded + '/' + expectedCount;
-                if (numImagesLoaded >= expectedCount) {
-                    loadingComplete = true;
-                    loadingEl.style.display = 'none';
-                    displayImage();
-                    startUpdateTimer();
-                }
-            }
-
             function getCurrentImageIndex() {
-                const imageCount = imageUrls.length || IMAGE_COUNT;
-                const now = new Date();
-                const totalSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-                const cycleNumber = Math.floor(totalSeconds / FREQUENCY_SECONDS);
+                var imageCount = imageUrls.length || IMAGE_COUNT;
+                var now = new Date();
+                var totalSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+                var cycleNumber = Math.floor(totalSeconds / FREQUENCY_SECONDS);
                 return cycleNumber % imageCount;
             }
 
             function displayImage() {
-                const index = getCurrentImageIndex();
-                if (index !== currentImageIndex) {
+                var index = getCurrentImageIndex();
+                var fullUrl = imageUrls[index];
+                var thumbUrl = thumbUrls[index];
+
+                if (!fullUrl) return;
+
+                // Only update if URL actually changed
+                if (fullUrl !== currentDisplayedUrl || (currentIsThumb && preloadedImages[fullUrl])) {
                     currentImageIndex = index;
-                    console.log('[DEBUG] Displaying image index:', index, 'url:', imageUrls[index]);
-                    setBackground(imageUrls[index]);
+
+                    // Check if full image is already preloaded
+                    if (preloadedImages[fullUrl]) {
+                        // Full image ready, show it
+                        currentDisplayedUrl = fullUrl;
+                        currentIsThumb = false;
+                        setBackground(fullUrl);
+                    } else if (thumbUrl && (preloadedThumbs[thumbUrl] || preloadedImages[thumbUrl])) {
+                        // Show thumbnail while full loads
+                        currentDisplayedUrl = fullUrl;
+                        currentIsThumb = true;
+                        setBackground(thumbUrl);
+
+                        // Preload full image and swap when ready
+                        preloadImage(fullUrl, function() {
+                            // Only swap if we're still on the same image
+                            if (currentDisplayedUrl === fullUrl && currentIsThumb) {
+                                setBackground(fullUrl);
+                                currentIsThumb = false;
+                            }
+                        });
+                    } else {
+                        // No preload available, just load full
+                        currentDisplayedUrl = fullUrl;
+                        currentIsThumb = false;
+                        setBackground(fullUrl);
+                    }
                 }
             }
 
-            function setBackground(imgUrl) {
-                console.log('[DEBUG] setBackground called with URL:', imgUrl);
-                displayEl.src = imgUrl;
-                console.log('[DEBUG] Image src set to:', displayEl.src);
+            function setBackground(baseUrl) {
+                // Use preloaded image if available, otherwise load with cache buster
+                var img = preloadedImages[baseUrl];
+                if (img && img.src) {
+                    displayEl.src = img.src;
+                } else {
+                    displayEl.src = baseUrl + '?v=' + Date.now();
+                }
             }
 
-            let currentPlaylistName = null;
+            var currentPlaylistName = null;
+            var currentPlaylistItems = null; // Store full playlist items for comparison
 
             function loadConfig() {
-                console.log('[DEBUG] loadConfig() called');
-                // Load both config and playlist
-                Promise.all([
-                    fetch('/config').then(function(r) { return r.json(); }),
-                    fetch('/playlist').then(function(r) { return r.json(); })
-                ]).then(function(results) {
-                    const config = results[0];
-                    const playlist = results[1];
+                if (console && console.log) console.log('[DEBUG] loadConfig() called');
 
-                    console.log('[DEBUG] Config and playlist loaded:', config, playlist);
+                // Use XMLHttpRequest for old browser compatibility
+                var configLoaded = false;
+                var playlistLoaded = false;
+                var config = {};
+                var playlist = {};
 
-                    if (config.frequency) {
-                        FREQUENCY_SECONDS = config.frequency;
-                        console.log('Loaded frequency:', FREQUENCY_SECONDS, 'seconds');
+                function checkBothLoaded() {
+                    if (configLoaded && playlistLoaded) {
+                        if (console && console.log) console.log('[DEBUG] Config and playlist loaded:', config, playlist);
+
+                        if (config.frequency) {
+                            FREQUENCY_SECONDS = config.frequency;
+                            if (console && console.log) console.log('Loaded frequency:', FREQUENCY_SECONDS, 'seconds');
+                        }
+
+                        if (playlist.items) {
+                            if (console && console.log) console.log('Loaded playlist:', playlist.name, 'with', playlist.items.length, 'items');
+                            currentPlaylistName = playlist.name;
+                            currentPlaylistItems = playlist.items;
+                            if (console && console.log) console.log('[DEBUG] Set currentPlaylistName to:', currentPlaylistName);
+                            imageUrls = buildImageUrls(playlist.items);
+                            if (console && console.log) console.log('[DEBUG] Built imageUrls:', imageUrls.length, 'items');
+                            loadImages();
+                        } else {
+                            // Fallback
+                            imageUrls = buildImageUrls(null);
+                            loadImages();
+                        }
                     }
+                }
 
-                    if (playlist.items) {
-                        console.log('Loaded playlist:', playlist.name, 'with', playlist.items.length, 'items');
-                        currentPlaylistName = playlist.name;
-                        console.log('[DEBUG] Set currentPlaylistName to:', currentPlaylistName);
-                        buildImageUrls(playlist.items);
-                        console.log('[DEBUG] Built imageUrls:', imageUrls.length, 'items');
-                        loadImages();
+                var configXhr = new XMLHttpRequest();
+                configXhr.open('GET', '/config', true);
+                configXhr.onreadystatechange = function() {
+                    if (configXhr.readyState === 4) {
+                        if (configXhr.status === 200) {
+                            try {
+                                config = JSON.parse(configXhr.responseText);
+                            } catch (e) {
+                                if (console && console.warn) console.warn('Failed to parse config:', e);
+                            }
+                        }
+                        configLoaded = true;
+                        checkBothLoaded();
                     }
-                }).catch(function(err) {
-                    console.warn('Failed to load config/playlist, using defaults:', err);
-                    // Still try to load images with default behavior
-                    buildImageUrls(null);
-                    loadImages();
-                });
+                };
+                configXhr.send();
+
+                var playlistXhr = new XMLHttpRequest();
+                playlistXhr.open('GET', '/playlist', true);
+                playlistXhr.onreadystatechange = function() {
+                    if (playlistXhr.readyState === 4) {
+                        if (playlistXhr.status === 200) {
+                            try {
+                                playlist = JSON.parse(playlistXhr.responseText);
+                            } catch (e) {
+                                if (console && console.warn) console.warn('Failed to parse playlist:', e);
+                            }
+                        }
+                        playlistLoaded = true;
+                        checkBothLoaded();
+                    }
+                };
+                playlistXhr.send();
             }
 
-            function checkForPlaylistChanges() {
-                fetch('/playlist').then(function(r) { return r.json(); }).then(function(playlist) {
-                    console.log('[DEBUG] checkForPlaylistChanges: current=', currentPlaylistName, 'server=', playlist.name);
-                    if (playlist.name !== currentPlaylistName) {
-                        console.log('Playlist changed from', currentPlaylistName, 'to', playlist.name, '- reloading page');
-                        // Force hard reload with cache bypass
-                        location.reload(true);
+            function checkForChanges() {
+                // Skip if already polling (limit to 1 outstanding request)
+                if (isPolling) return;
+                isPolling = true;
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '/playlist', true);
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        isPolling = false; // Clear flag when request completes
+
+                        if (xhr.status === 200) {
+                            try {
+                                var playlist = JSON.parse(xhr.responseText);
+
+                                // Check for playlist name change
+                                if (playlist.name !== currentPlaylistName) {
+                                    if (console && console.log) console.log('Playlist changed from', currentPlaylistName, 'to', playlist.name, '- reloading');
+                                    location.reload(true);
+                                    return;
+                                }
+
+                                // Check for URL changes in current playlist items (flips!)
+                                if (playlist.items && playlist.items.length > 0) {
+                                    var newUrls = buildImageUrls(playlist.items);
+                                    var newThumbs = thumbUrls.slice(); // Save current thumbs built by buildImageUrls
+                                    var currentIndex = getCurrentImageIndex();
+                                    var currentExpectedUrl = newUrls[currentIndex];
+                                    var currentExpectedThumb = newThumbs[currentIndex];
+                                    var oldUrl = imageUrls[currentIndex];
+
+                                    // Check if the URL for the current index changed
+                                    if (oldUrl && currentExpectedUrl && getBaseUrl(oldUrl) !== getBaseUrl(currentExpectedUrl)) {
+                                        if (console && console.log) console.log('[FLIP] Image URL changed at index', currentIndex);
+                                        if (console && console.log) console.log('[FLIP] Old:', oldUrl, '-> New:', currentExpectedUrl);
+
+                                        // Preload the thumbnail first, then full image
+                                        preloadImage(currentExpectedThumb, function() {
+                                            // Show thumb immediately
+                                            preloadedThumbs[currentExpectedThumb] = preloadedImages[currentExpectedThumb];
+                                            imageUrls = newUrls;
+                                            currentPlaylistItems = playlist.items;
+                                            currentDisplayedUrl = null;
+                                            displayImage();
+
+                                            // Then preload full image
+                                            preloadImage(currentExpectedUrl, function() {
+                                                if (console && console.log) console.log('[FLIP] Full image preloaded');
+                                                // Swap to full if still showing thumb
+                                                if (currentIsThumb && currentDisplayedUrl === currentExpectedUrl) {
+                                                    setBackground(currentExpectedUrl);
+                                                    currentIsThumb = false;
+                                                }
+                                            });
+                                        });
+                                    } else {
+                                        // No change at current index, but update the full list
+                                        // in case other indices changed
+                                        var anyChanged = false;
+                                        for (var i = 0; i < newUrls.length; i++) {
+                                            if (getBaseUrl(imageUrls[i]) !== getBaseUrl(newUrls[i])) {
+                                                anyChanged = true;
+                                                // Preload changed thumb and image in background
+                                                preloadImage(newThumbs[i], null);
+                                                preloadImage(newUrls[i], null);
+                                            }
+                                        }
+                                        if (anyChanged) {
+                                            imageUrls = newUrls;
+                                            currentPlaylistItems = playlist.items;
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                if (console && console.warn) console.warn('Failed to parse playlist:', e);
+                            }
+                        }
                     }
-                }).catch(function(err) {
-                    console.warn('Failed to check playlist:', err);
-                });
+                };
+                xhr.send();
             }
 
             function sendHeartbeat() {
                 if (!screenId) return; // Don't send heartbeat if no screen ID
 
-                fetch('/heartbeat/' + screenId, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                }).catch(function(err) {
-                    console.warn('Failed to send heartbeat:', err);
-                });
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/heartbeat/' + screenId, true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.send();
             }
 
             function startUpdateTimer() {
@@ -227,35 +430,32 @@
                 // Send heartbeat every minute
                 setInterval(sendHeartbeat, 60000);
 
-                // Check for playlist changes every 5 seconds
-                setInterval(checkForPlaylistChanges, 5000);
+                // Poll for playlist changes
+                setInterval(checkForChanges, POLL_INTERVAL);
             }
 
             // Listen for messages from parent (wall.html) to jump to specific asset group
             window.addEventListener('message', function(event) {
                 if (event.data && event.data.type === 'jumpToAssetGroup') {
-                    const targetAssetGroup = event.data.asset_group;
-                    console.log('[DEBUG] Received jumpToAssetGroup message:', targetAssetGroup);
+                    var targetAssetGroup = event.data.asset_group;
+                    if (console && console.log) console.log('[DEBUG] Received jumpToAssetGroup message:', targetAssetGroup);
 
                     // Find the index of this asset group in our imageUrls array
-                    // The asset group name will be like "art/model", and we need to find
-                    // the matching URL in imageUrls
-                    let targetIndex = -1;
-                    for (let i = 0; i < imageUrls.length; i++) {
-                        // imageUrls contains paths like "/content/img/art/model.left.png?v=..."
-                        // Check if the URL contains the asset group path
-                        if (imageUrls[i].includes(targetAssetGroup)) {
+                    var targetIndex = -1;
+                    for (var i = 0; i < imageUrls.length; i++) {
+                        if (imageUrls[i].indexOf(targetAssetGroup) !== -1) {
                             targetIndex = i;
                             break;
                         }
                     }
 
                     if (targetIndex >= 0) {
-                        console.log('[DEBUG] Found asset group at index:', targetIndex);
+                        if (console && console.log) console.log('[DEBUG] Found asset group at index:', targetIndex);
                         currentImageIndex = targetIndex;
+                        currentDisplayedUrl = imageUrls[targetIndex];
                         setBackground(imageUrls[targetIndex]);
                     } else {
-                        console.warn('[DEBUG] Could not find asset group in imageUrls:', targetAssetGroup);
+                        if (console && console.warn) console.warn('[DEBUG] Could not find asset group in imageUrls:', targetAssetGroup);
                     }
                 }
             });
@@ -267,9 +467,7 @@
                 setTimeout(function() {
                     if (!loadingComplete) {
                         loadingEl.style.display = 'none';
-                        errorEl.textContent = 'Some images failed to load. Screen: ' + (screenId || 'default');
-                        errorEl.style.display = 'block';
-                        // Still try to display what we have
+                        // Silently proceed - don't show error on display screens
                         loadingComplete = true;
                         displayImage();
                         startUpdateTimer();

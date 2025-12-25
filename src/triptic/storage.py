@@ -6,6 +6,12 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 import logging
+from PIL import Image
+import io
+
+# Thumbnail dimensions (maintaining 9:16 aspect ratio)
+THUMBNAIL_WIDTH = 270
+THUMBNAIL_HEIGHT = 480
 
 # Default asset UUIDs (well-known UUIDs for default placeholder images)
 DEFAULT_LEFT_UUID = "00000000-0000-0000-0000-000000000001"
@@ -166,6 +172,131 @@ def get_public_url(content_uuid: str) -> str:
     return ""
 
 
+def get_thumbnail_path(content_uuid: str) -> Optional[Path]:
+    """
+    Get the path to the thumbnail for a given UUID.
+
+    Args:
+        content_uuid: The UUID of the asset
+
+    Returns:
+        Path to thumbnail file, or None if not found
+    """
+    assets_dir = get_assets_dir()
+    thumb_path = assets_dir / f"{content_uuid}_thumb.png"
+    if thumb_path.exists():
+        return thumb_path
+    return None
+
+
+def get_thumbnail_url(content_uuid: str) -> str:
+    """
+    Get the public URL path for a thumbnail.
+
+    Args:
+        content_uuid: The UUID of the asset
+
+    Returns:
+        URL path like '/content/assets/{uuid}_thumb.png'
+    """
+    return f"/content/assets/{content_uuid}_thumb.png"
+
+
+def create_thumbnail(content_uuid: str, source_path: Optional[Path] = None) -> Optional[Path]:
+    """
+    Create a thumbnail for an image.
+
+    Args:
+        content_uuid: The UUID of the asset
+        source_path: Optional source path (if not provided, uses the stored file)
+
+    Returns:
+        Path to created thumbnail, or None on failure
+    """
+    try:
+        # Get source file if not provided
+        if source_path is None:
+            source_path = get_file_path(content_uuid)
+
+        if source_path is None or not source_path.exists():
+            logging.warning(f"Cannot create thumbnail: source file not found for {content_uuid}")
+            return None
+
+        # Skip video files
+        if source_path.suffix.lower() in ['.mp4', '.webm', '.mov']:
+            logging.debug(f"Skipping thumbnail for video file: {content_uuid}")
+            return None
+
+        # Open and resize image
+        with Image.open(source_path) as img:
+            # Convert to RGB if necessary (for PNG with transparency)
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+
+            # Calculate dimensions preserving aspect ratio
+            # Fit within THUMBNAIL_WIDTH x THUMBNAIL_HEIGHT
+            img.thumbnail((THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT), Image.Resampling.LANCZOS)
+
+            # Save thumbnail
+            assets_dir = get_assets_dir()
+            thumb_path = assets_dir / f"{content_uuid}_thumb.png"
+            img.save(thumb_path, 'PNG', optimize=True)
+            logging.info(f"Created thumbnail: {thumb_path}")
+            return thumb_path
+
+    except Exception as e:
+        logging.error(f"Error creating thumbnail for {content_uuid}: {e}")
+        return None
+
+
+def create_thumbnail_from_bytes(content_uuid: str, image_data: bytes) -> Optional[Path]:
+    """
+    Create a thumbnail from raw image bytes.
+
+    Args:
+        content_uuid: The UUID for the thumbnail
+        image_data: Raw image bytes
+
+    Returns:
+        Path to created thumbnail, or None on failure
+    """
+    try:
+        with Image.open(io.BytesIO(image_data)) as img:
+            # Convert to RGB if necessary
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+
+            # Calculate dimensions preserving aspect ratio
+            img.thumbnail((THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT), Image.Resampling.LANCZOS)
+
+            # Save thumbnail
+            assets_dir = get_assets_dir()
+            thumb_path = assets_dir / f"{content_uuid}_thumb.png"
+            img.save(thumb_path, 'PNG', optimize=True)
+            logging.info(f"Created thumbnail from bytes: {thumb_path}")
+            return thumb_path
+
+    except Exception as e:
+        logging.error(f"Error creating thumbnail from bytes for {content_uuid}: {e}")
+        return None
+
+
+def delete_thumbnail(content_uuid: str) -> bool:
+    """
+    Delete the thumbnail for an asset.
+
+    Args:
+        content_uuid: The UUID of the asset
+
+    Returns:
+        True if deleted, False otherwise
+    """
+    thumb_path = get_thumbnail_path(content_uuid)
+    if thumb_path and thumb_path.exists():
+        thumb_path.unlink()
+        logging.info(f"Deleted thumbnail: {thumb_path}")
+        return True
+    return False
 
 
 def get_db_path() -> Path:
