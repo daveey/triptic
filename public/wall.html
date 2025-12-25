@@ -572,9 +572,7 @@
             } catch (err) {
                 console.error('[nextAssetGroup] Failed to update server state:', err);
             }
-
-            // Reload screens to reflect updated server state
-            reloadScreens();
+            // Frames will pick up the change via polling
         }
 
         async function previousAssetGroup() {
@@ -606,9 +604,7 @@
             } catch (err) {
                 console.error('[previousAssetGroup] Failed to update server state:', err);
             }
-
-            // Reload screens to reflect updated server state
-            reloadScreens();
+            // Frames will pick up the change via polling
         }
 
         function updateTime() {
