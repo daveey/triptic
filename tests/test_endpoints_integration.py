@@ -71,6 +71,10 @@ class EndpointIntegrationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test database and start server."""
+        # Save and unset auth env vars (tests run without auth)
+        cls._saved_auth_username = os.environ.pop('TRIPTIC_AUTH_USERNAME', None)
+        cls._saved_auth_password = os.environ.pop('TRIPTIC_AUTH_PASSWORD', None)
+
         # Create temporary database
         cls.temp_db_fd, cls.temp_db_path = tempfile.mkstemp(suffix='.db')
 
@@ -89,6 +93,11 @@ class EndpointIntegrationTest(unittest.TestCase):
         cls.server_port = 13000  # Use non-standard port for testing
         cls.base_url = f"http://localhost:{cls.server_port}"
 
+        # Build environment without auth vars
+        server_env = os.environ.copy()
+        server_env.pop('TRIPTIC_AUTH_USERNAME', None)
+        server_env.pop('TRIPTIC_AUTH_PASSWORD', None)
+
         # Start server in background
         cls.server_process = subprocess.Popen(
             ['uv', 'run', 'triptic', 'start',
@@ -96,7 +105,8 @@ class EndpointIntegrationTest(unittest.TestCase):
              '--port', str(cls.server_port),
              '-d'],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
+            env=server_env
         )
 
         # Wait for server to start
@@ -126,6 +136,12 @@ class EndpointIntegrationTest(unittest.TestCase):
         subprocess.run(['uv', 'run', 'triptic', 'stop'],
                       stdout=subprocess.DEVNULL,
                       stderr=subprocess.DEVNULL)
+
+        # Restore auth env vars
+        if cls._saved_auth_username is not None:
+            os.environ['TRIPTIC_AUTH_USERNAME'] = cls._saved_auth_username
+        if cls._saved_auth_password is not None:
+            os.environ['TRIPTIC_AUTH_PASSWORD'] = cls._saved_auth_password
 
         # Clean up temp files
         os.close(cls.temp_db_fd)
@@ -499,8 +515,8 @@ class EndpointIntegrationTest(unittest.TestCase):
             f"{self.base_url}/asset-group/test-group/edit/left",
             json={"prompt": "Edit instruction"}
         )
-        # Will likely fail without API key
-        self.assertIn(response.status_code, [200, 400, 500])
+        # 404 if image file not found, 400/500 for other errors
+        self.assertIn(response.status_code, [200, 400, 404, 500])
 
     def test_post_asset_group_rename(self):
         """Test POST /asset-group/{name}/rename"""
@@ -545,8 +561,8 @@ class EndpointIntegrationTest(unittest.TestCase):
             f"{self.base_url}/asset-group/test-group/video/left",
             json={"prompt": "Test video"}
         )
-        # Will likely fail without API key
-        self.assertIn(response.status_code, [200, 400, 500])
+        # 404 if asset group or image not found, 400/500 for other errors
+        self.assertIn(response.status_code, [200, 400, 404, 500])
 
     def test_post_asset_group_flip(self):
         """Test POST /asset-group/{name}/flip/{screen}"""
@@ -554,8 +570,8 @@ class EndpointIntegrationTest(unittest.TestCase):
         response = requests.post(
             f"{self.base_url}/asset-group/test-group/flip/left"
         )
-        # May fail if image processing fails
-        self.assertIn(response.status_code, [200, 400, 500])
+        # 404 if asset group or image not found, 400/500 for other errors
+        self.assertIn(response.status_code, [200, 400, 404, 500])
 
     def test_post_asset_group_delete_version(self):
         """Test POST /asset-group/{name}/delete-version/{screen}"""
@@ -596,14 +612,14 @@ class EndpointIntegrationTest(unittest.TestCase):
         # May fail with image processing errors
         self.assertIn(response.status_code, [200, 400, 500])
 
-    def test_post_asset_group_save_prompt(self):
-        """Test POST /asset-group/{name}/save-prompt"""
-        self._mark_tested('POST', '/asset-group/**/save-prompt')
+    def test_post_frame_log(self):
+        """Test POST /frame-log"""
+        self._mark_tested('POST', '/frame-log')
         response = requests.post(
-            f"{self.base_url}/asset-group/test-group/save-prompt",
-            json={"screen": "left", "prompt": "New prompt"}
+            f"{self.base_url}/frame-log",
+            json={"screen": "left", "event": "test"}
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertIn(response.status_code, [200, 400])
 
     def test_post_prompt_fluff(self):
         """Test POST /prompt/fluff"""
@@ -659,6 +675,56 @@ class EndpointIntegrationTest(unittest.TestCase):
         )
         response = requests.delete(f"{self.base_url}/playlist/delete-test-playlist")
         self.assertEqual(response.status_code, 200)
+
+    # Additional endpoint tests for full coverage
+
+    def test_get_generation_queue(self):
+        """Test GET /generation-queue"""
+        self._mark_tested('GET', '/generation-queue')
+        response = requests.get(f"{self.base_url}/generation-queue")
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_frame_logs(self):
+        """Test GET /frame-logs"""
+        self._mark_tested('GET', '/frame-logs')
+        response = requests.get(f"{self.base_url}/frame-logs")
+        self.assertEqual(response.status_code, 200)
+
+    def test_post_generation_queue_cancel(self):
+        """Test POST /generation-queue/cancel"""
+        self._mark_tested('POST', '/generation-queue/cancel')
+        response = requests.post(
+            f"{self.base_url}/generation-queue/cancel",
+            json={"asset_group_id": "nonexistent", "screen": "left"}
+        )
+        # May return 200 even if nothing to cancel, or 400/404
+        self.assertIn(response.status_code, [200, 400, 404])
+
+    def test_post_admin_generate_thumbnails(self):
+        """Test POST /admin/generate-thumbnails"""
+        self._mark_tested('POST', '/admin/generate-thumbnails')
+        response = requests.post(f"{self.base_url}/admin/generate-thumbnails")
+        self.assertIn(response.status_code, [200, 500])
+
+    def test_post_asset_group_create_from_prompt(self):
+        """Test POST /asset-group/create-from-prompt"""
+        self._mark_tested('POST', '/asset-group/create-from-prompt')
+        response = requests.post(
+            f"{self.base_url}/asset-group/create-from-prompt",
+            json={"prompt": "Test prompt for creation"}
+        )
+        # Will likely fail without API key, but endpoint should exist
+        self.assertIn(response.status_code, [200, 400, 500])
+
+    def test_post_asset_group_upload_from_url(self):
+        """Test POST /asset-group/{name}/upload-from-url/{screen}"""
+        self._mark_tested('POST', '/asset-group/*/upload-from-url/*')
+        response = requests.post(
+            f"{self.base_url}/asset-group/test-group/upload-from-url/left",
+            json={"url": "https://example.com/image.png"}
+        )
+        # Will fail with invalid URL or network error, but endpoint should exist
+        self.assertIn(response.status_code, [200, 400, 404, 500])
 
 
 if __name__ == '__main__':

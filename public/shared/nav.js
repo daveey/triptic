@@ -12,6 +12,8 @@
             <span class="nav-separator">|</span>
             <a href="/playlists.html" class="nav-link">Playlists</a>
             <span class="nav-separator">|</span>
+            <a href="/queue.html" class="nav-link">Queue</a>
+            <span class="nav-separator">|</span>
             <a href="/settings.html" class="nav-link">Settings</a>
             <span class="nav-separator">|</span>
             <div class="nav-search">

@@ -182,3 +182,107 @@ pytest tests/test_genai_integration.py -v -m "genai or slow"
 - Add docstrings for public functions
 - Handle errors gracefully with clear messages
 - Follow the project's existing code style
+
+## Creating Playlists and Asset Groups via API
+
+When creating themed playlists with multiple asset groups, use the following workflow:
+
+### Authentication
+
+The production server requires Basic Auth:
+```bash
+# Get credentials from .env
+TRIPTIC_AUTH_USERNAME=daveey
+TRIPTIC_AUTH_PASSWORD=daviddavid
+
+# Use with curl
+curl -u "${TRIPTIC_AUTH_USERNAME}:${TRIPTIC_AUTH_PASSWORD}" ...
+```
+
+### 1. Create a Playlist
+
+```bash
+curl -s -u "daveey:daviddavid" -X POST https://triptic-daveey.fly.dev/playlist/create \
+  -H "Content-Type: application/json" \
+  -d '{"name": "playlist-name"}'
+```
+
+### 2. Create Asset Groups
+
+Asset groups use `id` (not `name`) in the JSON body. Use `/` for hierarchical naming:
+
+```bash
+curl -s -u "daveey:daviddavid" -X POST https://triptic-daveey.fly.dev/asset-group/create \
+  -H "Content-Type: application/json" \
+  -d '{"id": "theme/subject-name"}'
+```
+
+### 3. Add Asset Groups to Playlist
+
+URL-encode the `/` as `%2F`:
+
+```bash
+curl -s -u "daveey:daviddavid" -X POST \
+  "https://triptic-daveey.fly.dev/asset-group/theme%2Fsubject-name/add-to-playlists" \
+  -H "Content-Type: application/json" \
+  -d '{"playlists": ["playlist-name"]}'
+```
+
+### 4. Queue Image Generation
+
+Queue generation for each screen (left, center, right) with a prompt:
+
+```bash
+curl -s -u "daveey:daviddavid" -X POST \
+  "https://triptic-daveey.fly.dev/asset-group/theme%2Fsubject-name/regenerate/left" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Your detailed image prompt here"}'
+```
+
+### Full Example: Creating a Themed Playlist
+
+```bash
+# Variables
+AUTH="daveey:daviddavid"
+BASE="https://triptic-daveey.fly.dev"
+PLAYLIST="surreal"
+THEME="surreal"
+
+# 1. Create playlist
+curl -s -u "$AUTH" -X POST "$BASE/playlist/create" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\": \"$PLAYLIST\"}"
+
+# 2. Create asset groups
+for name in melting-time floating-apple elephant-parade; do
+  curl -s -u "$AUTH" -X POST "$BASE/asset-group/create" \
+    -H "Content-Type: application/json" \
+    -d "{\"id\": \"$THEME/$name\"}"
+done
+
+# 3. Add to playlist
+for name in melting-time floating-apple elephant-parade; do
+  curl -s -u "$AUTH" -X POST "$BASE/asset-group/${THEME}%2F${name}/add-to-playlists" \
+    -H "Content-Type: application/json" \
+    -d "{\"playlists\": [\"$PLAYLIST\"]}"
+done
+
+# 4. Queue generation for all screens
+PROMPT="Melting clocks in desert, Salvador Dalí style"
+for screen in left center right; do
+  curl -s -u "$AUTH" -X POST "$BASE/asset-group/${THEME}%2Fmelting-time/regenerate/$screen" \
+    -H "Content-Type: application/json" \
+    -d "{\"prompt\": \"$PROMPT\"}"
+done
+```
+
+### API Endpoints Summary
+
+| Action | Method | Endpoint |
+|--------|--------|----------|
+| Create playlist | POST | `/playlist/create` |
+| Create asset group | POST | `/asset-group/create` |
+| Add to playlists | POST | `/asset-group/{id}/add-to-playlists` |
+| Regenerate image | POST | `/asset-group/{id}/regenerate/{screen}` |
+| Get queue status | GET | `/generation-queue` |
+| Cancel generation | POST | `/generation-queue/cancel` |

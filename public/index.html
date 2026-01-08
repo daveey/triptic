@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1080, height=1920">
+    <meta http-equiv="refresh" content="600" id="auto-refresh">
     <title>Triptic</title>
     <style>
         * {
@@ -58,6 +59,63 @@
             var isPolling = false; // Prevent concurrent poll requests
             var pollIntervalId = null; // Store interval ID to restart when config changes
 
+            // Remote logging - send console messages to server
+            var _screenId = '';  // Will be set after parsing URL
+            var _logQueue = [];
+            var _logFlushPending = false;
+
+            function remoteLog(level, message, data) {
+                _logQueue.push({ level: level, message: message, data: data });
+                if (!_logFlushPending) {
+                    _logFlushPending = true;
+                    setTimeout(flushLogs, 100);  // Batch logs
+                }
+            }
+
+            function flushLogs() {
+                _logFlushPending = false;
+                if (_logQueue.length === 0) return;
+
+                var logs = _logQueue.splice(0, _logQueue.length);
+                logs.forEach(function(log) {
+                    try {
+                        var xhr = new XMLHttpRequest();
+                        xhr.open('POST', '/frame-log', true);
+                        xhr.setRequestHeader('Content-Type', 'application/json');
+                        xhr.send(JSON.stringify({
+                            screen: _screenId || 'unknown',
+                            level: log.level,
+                            message: log.message,
+                            data: log.data
+                        }));
+                    } catch (e) { /* ignore logging errors */ }
+                });
+            }
+
+            // Override console methods to also send to server
+            var _origLog = console.log;
+            var _origWarn = console.warn;
+            var _origError = console.error;
+
+            console.log = function() {
+                _origLog.apply(console, arguments);
+                remoteLog('log', Array.prototype.slice.call(arguments).join(' '));
+            };
+            console.warn = function() {
+                _origWarn.apply(console, arguments);
+                remoteLog('warn', Array.prototype.slice.call(arguments).join(' '));
+            };
+            console.error = function() {
+                _origError.apply(console, arguments);
+                remoteLog('error', Array.prototype.slice.call(arguments).join(' '));
+            };
+
+            // Catch uncaught errors
+            window.onerror = function(message, source, lineno, colno, error) {
+                remoteLog('error', 'Uncaught: ' + message + ' at ' + source + ':' + lineno);
+                return false;
+            };
+
             // Helper function for old browsers without URLSearchParams
             function getUrlParam(name) {
                 var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
@@ -67,6 +125,7 @@
             // State
             // Check for ?id=X parameter, fallback to hash, or redirect to dashboard
             var screenId = getUrlParam('id') || document.URL.split("#")[1] || "";
+            _screenId = screenId;  // Set for remote logging
 
             // If no screen ID specified, redirect to dashboard
             if (!screenId) {
@@ -101,6 +160,11 @@
                     // Load from playlist - no cache buster, we use preloading
                     for (var i = 0; i < playlistItems.length; i++) {
                         var item = playlistItems[i];
+                        // Skip items with no images on any screen
+                        if (!item['left'] && !item['center'] && !item['right']) {
+                            if (console && console.log) console.log('[buildImageUrls] Skipping item with no images:', item.name);
+                            continue;
+                        }
                         var url = item[screenId] || item['center'] || '';
                         var thumbKey = screenId + '_thumb';
                         var thumbUrl = item[thumbKey] || item['center_thumb'] || url;
@@ -112,7 +176,7 @@
                 } else {
                     // Fallback to old behavior
                     var basePath = screenId ? 'img/' + screenId + '/' : 'img/';
-                    var ext = getUrlParam('ext') || 'svg';
+                    var ext = getUrlParam('ext') || 'png';
                     for (var j = 1; j <= IMAGE_COUNT; j++) {
                         newUrls.push(basePath + j + '.' + ext);
                         newThumbs.push(basePath + j + '.' + ext);
@@ -140,23 +204,26 @@
                     preloadedImages[url] = img;
                     if (callback) callback(img);
                 };
-                // Add cache buster for fresh fetch
-                img.src = url + '?v=' + Date.now();
+                // Images have unique UUIDs, so browser cache is safe to use
+                img.src = url;
             }
 
-            function preloadImagesSequentially(urls, startIndex, callback) {
-                // Preload images one at a time, starting from startIndex and wrapping around
+            var PRELOAD_AHEAD = 3;  // Only preload 3 images ahead
+
+            function preloadImagesSequentially(urls, startIndex, count, callback) {
+                // Preload up to 'count' images starting from startIndex
                 var total = urls.length;
                 if (total === 0) {
                     if (callback) callback();
                     return;
                 }
 
+                var toLoad = Math.min(count, total);
                 var loaded = 0;
                 var currentIdx = startIndex;
 
                 function loadNext() {
-                    if (loaded >= total) {
+                    if (loaded >= toLoad) {
                         if (callback) callback();
                         return;
                     }
@@ -164,9 +231,6 @@
                     var url = urls[currentIdx];
                     preloadImage(url, function() {
                         loaded++;
-                        if (loadingEl && loadingEl.style.display !== 'none') {
-                            loadingEl.textContent = 'Loading... ' + loaded + '/' + total;
-                        }
                         // Move to next index, wrapping around
                         currentIdx = (currentIdx + 1) % total;
                         loadNext();
@@ -174,6 +238,14 @@
                 }
 
                 loadNext();
+            }
+
+            function preloadAhead(fromIndex) {
+                // Preload next PRELOAD_AHEAD thumbs and full images
+                var nextIndex = (fromIndex + 1) % imageUrls.length;
+                preloadImagesSequentially(thumbUrls, nextIndex, PRELOAD_AHEAD, function() {
+                    preloadImagesSequentially(imageUrls, nextIndex, PRELOAD_AHEAD, null);
+                });
             }
 
             function loadImages() {
@@ -200,22 +272,8 @@
                                 currentIsThumb = false;
                             }
 
-                            // Then preload remaining thumbs sequentially (starting from next)
-                            var nextIndex = (startIndex + 1) % thumbUrls.length;
-                            preloadImagesSequentially(thumbUrls, nextIndex, function() {
-                                // Copy all thumbs to cache
-                                for (var i = 0; i < thumbUrls.length; i++) {
-                                    if (preloadedImages[thumbUrls[i]]) {
-                                        preloadedThumbs[thumbUrls[i]] = preloadedImages[thumbUrls[i]];
-                                    }
-                                }
-                                if (console && console.log) console.log('[LOAD] All thumbnails preloaded');
-
-                                // Finally preload remaining full images sequentially
-                                preloadImagesSequentially(imageUrls, nextIndex, function() {
-                                    if (console && console.log) console.log('[LOAD] All full images preloaded');
-                                });
-                            });
+                            // Preload only next few images (not entire playlist)
+                            preloadAhead(startIndex);
                         });
                     });
                 } else {
@@ -235,16 +293,35 @@
                 return cycleNumber % imageCount;
             }
 
+            var lastLoggedIndex = -1;
+            var displayCallCount = 0;
+
             function displayImage() {
+                displayCallCount++;
                 var index = getCurrentImageIndex();
                 var fullUrl = imageUrls[index];
                 var thumbUrl = thumbUrls[index];
 
-                if (!fullUrl) return;
+                // Log every minute (60 calls at 1 second interval) to show frame is alive
+                if (displayCallCount % 60 === 0) {
+                    if (console && console.log) console.log('[HEARTBEAT] displayImage called', displayCallCount, 'times, current index:', index, 'imageUrls.length:', imageUrls.length);
+                }
+
+                if (!fullUrl) {
+                    if (console && console.warn) console.warn('[displayImage] No URL at index', index, 'imageUrls.length:', imageUrls.length);
+                    return;
+                }
 
                 // Only update if URL actually changed
                 if (fullUrl !== currentDisplayedUrl || (currentIsThumb && preloadedImages[fullUrl])) {
+                    if (index !== lastLoggedIndex) {
+                        if (console && console.log) console.log('[INDEX CHANGE] Switching to index', index, 'url:', fullUrl.substring(0, 60) + '...');
+                        lastLoggedIndex = index;
+                    }
                     currentImageIndex = index;
+
+                    // Preload next images ahead
+                    preloadAhead(index);
 
                     // Check if full image is already preloaded
                     if (preloadedImages[fullUrl]) {
@@ -276,13 +353,18 @@
             }
 
             function setBackground(baseUrl) {
-                // Use preloaded image if available, otherwise load with cache buster
+                // Use preloaded image if available, otherwise load directly (UUID-based URLs are cache-safe)
                 var img = preloadedImages[baseUrl];
                 if (img && img.src) {
                     displayEl.src = img.src;
                 } else {
-                    displayEl.src = baseUrl + '?v=' + Date.now();
+                    displayEl.src = baseUrl;
                 }
+
+                // Add error handler for the display image
+                displayEl.onerror = function() {
+                    if (console && console.error) console.error('[IMG ERROR] Failed to load image:', baseUrl);
+                };
             }
 
             var currentPlaylistName = null;
@@ -309,6 +391,20 @@
                         if (config.poll_interval) {
                             POLL_INTERVAL = config.poll_interval;
                             if (console && console.log) console.log('Loaded poll_interval:', POLL_INTERVAL, 'ms');
+                        }
+
+                        // Update auto-refresh meta tag with configured value
+                        var refreshMeta = document.getElementById('auto-refresh');
+                        if (refreshMeta) {
+                            if (config.frame_reload_minutes && config.frame_reload_minutes > 0) {
+                                var refreshSeconds = config.frame_reload_minutes * 60;
+                                refreshMeta.setAttribute('content', refreshSeconds);
+                                if (console && console.log) console.log('Set auto-refresh to:', config.frame_reload_minutes, 'minutes');
+                            } else if (config.frame_reload_minutes === 0) {
+                                // Disable auto-refresh by removing the meta tag
+                                refreshMeta.remove();
+                                if (console && console.log) console.log('Auto-refresh disabled');
+                            }
                         }
 
                         if (playlist.items) {
@@ -459,7 +555,11 @@
 
                 // Check for image updates every second
                 updateInterval = setInterval(function() {
-                    displayImage();
+                    try {
+                        displayImage();
+                    } catch (e) {
+                        if (console && console.error) console.error('[ERROR] displayImage threw:', e.message || e);
+                    }
                 }, 1000);
 
                 // Send heartbeat every minute

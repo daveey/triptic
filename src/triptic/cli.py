@@ -289,11 +289,11 @@ def cmd_imgen(args: argparse.Namespace) -> int:
 
     print(f"[triptic] Generating images for '{name}' with prompt: {prompt}")
 
-    # Generate SVG images for each screen
-    from triptic.imgen import generate_svg_triplet
+    # Generate images for each screen
+    from triptic.imgen import generate_image_triplet
 
     try:
-        result = generate_svg_triplet(name, prompt, output_paths)
+        result = generate_image_triplet(name, prompt, output_paths)
 
         print(f"[triptic] Generated images:")
         for screen, path in output_paths.items():
@@ -371,7 +371,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 def cmd_generate_defaults(args: argparse.Namespace) -> int:
     """Generate default placeholder images for left, center, and right screens."""
     from triptic import db, storage
-    from triptic.imgen import generate_svg_triplet
+    from triptic.imgen import generate_image_triplet
 
     # Initialize database if needed
     db.init_database()
@@ -395,7 +395,7 @@ def cmd_generate_defaults(args: argparse.Namespace) -> int:
         print(f"[triptic] Generating all three placeholder images...")
 
         # Generate all three screens at once
-        result = generate_svg_triplet(
+        result = generate_image_triplet(
             name="defaults",
             prompt=prompt,
             output_paths=output_paths

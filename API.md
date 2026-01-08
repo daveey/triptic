@@ -163,6 +163,36 @@ Content-Type: application/octet-stream
 }
 ```
 
+### Upload Image from URL
+Fetch an image from a URL and upload it to a specific screen.
+
+```
+POST /asset-group/{name}/upload-from-url/{screen}
+Content-Type: application/json
+
+{
+  "url": "https://example.com/image.png",
+  "prompt": "Optional description of the image"
+}
+```
+
+**Parameters:**
+- `name`: Asset group name
+- `screen`: `left`, `center`, or `right`
+- `url`: URL of the image to fetch
+- `prompt`: Optional description/prompt for the image
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "uploaded": "center",
+  "new_uuid": "uuid-string",
+  "image_url": "/content/assets/{uuid}.png",
+  "source_url": "https://example.com/image.png"
+}
+```
+
 ### Regenerate Image (AI Generation)
 Generate a new image using a text prompt.
 

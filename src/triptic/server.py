@@ -14,7 +14,7 @@ import socketserver
 import threading
 import urllib.parse
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Import SQLite backend
@@ -261,7 +261,12 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         - Screen views: / and index.html (with or without ?id= parameter)
         - Static assets: /content/*, /shared/*, /defaults/*
         - Screen APIs: /config, /playlist, /heartbeat/*
+
+        Returns False if auth credentials are not configured.
         """
+        # If no credentials configured, skip auth entirely
+        if not os.environ.get('TRIPTIC_AUTH_USERNAME') or not os.environ.get('TRIPTIC_AUTH_PASSWORD'):
+            return False
         # Parse the path without query string
         parsed_path = urllib.parse.urlparse(path).path
 
@@ -285,14 +290,53 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         if parsed_path in ['/config', '/playlist']:
             return False
 
+        # Allow frame logging endpoint (for debugging)
+        if parsed_path == '/frame-log':
+            return False
+
         # Everything else requires auth
         return True
 
+    def _get_auth_token(self) -> str:
+        """Generate auth token from credentials."""
+        import hashlib
+        expected_username = os.environ.get('TRIPTIC_AUTH_USERNAME', '')
+        expected_password = os.environ.get('TRIPTIC_AUTH_PASSWORD', '')
+        # Create a hash of credentials as the token
+        token_source = f"{expected_username}:{expected_password}:triptic-auth"
+        return hashlib.sha256(token_source.encode()).hexdigest()[:32]
+
+    def _check_auth_cookie(self) -> bool:
+        """Check if request has valid auth cookie."""
+        cookie_header = self.headers.get('Cookie', '')
+        if not cookie_header:
+            return False
+
+        # Parse cookies
+        cookies = {}
+        for item in cookie_header.split(';'):
+            item = item.strip()
+            if '=' in item:
+                key, value = item.split('=', 1)
+                cookies[key.strip()] = value.strip()
+
+        auth_cookie = cookies.get('triptic_auth')
+        if not auth_cookie:
+            return False
+
+        expected_token = self._get_auth_token()
+        return auth_cookie == expected_token
+
     def _check_auth(self) -> bool:
-        """Check if the request has valid basic authentication.
+        """Check if the request has valid authentication (cookie or basic auth).
 
         Returns True if auth is valid or not required, False otherwise.
         """
+        # First check for valid auth cookie
+        if self._check_auth_cookie():
+            return True
+
+        # Fall back to basic auth
         auth_header = self.headers.get('Authorization')
         if not auth_header:
             return False
@@ -316,7 +360,11 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 logging.error("TRIPTIC_AUTH_USERNAME and TRIPTIC_AUTH_PASSWORD must be set in environment")
                 return False
 
-            return username == expected_username and password == expected_password
+            if username == expected_username and password == expected_password:
+                # Mark that we should set cookie in response
+                self._set_auth_cookie = True
+                return True
+            return False
         except Exception as e:
             logging.debug(f"Auth check failed: {e}")
             return False
@@ -328,6 +376,16 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-type', 'text/html')
         self.end_headers()
         self.wfile.write(b'<html><body><h1>401 Unauthorized</h1><p>Authentication required.</p></body></html>')
+
+    def _maybe_set_auth_cookie(self) -> None:
+        """Set auth cookie if basic auth just succeeded."""
+        if getattr(self, '_set_auth_cookie', False):
+            token = self._get_auth_token()
+            # Set cookie that expires in 1 year
+            expires = datetime.now() + timedelta(days=365)
+            expires_str = expires.strftime('%a, %d %b %Y %H:%M:%S GMT')
+            self.send_header('Set-Cookie', f'triptic_auth={token}; Path=/; Expires={expires_str}; SameSite=Strict')
+            self._set_auth_cookie = False
 
     def log_message(self, format: str, *args) -> None:
         """Log HTTP requests to separate requests log."""
@@ -352,6 +410,18 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         if self._requires_auth(self.path):
             if not self._check_auth():
                 self._send_auth_required()
+                return
+
+            # If basic auth just succeeded, set cookie via redirect for HTML pages
+            if getattr(self, '_set_auth_cookie', False) and '.html' in self.path:
+                token = self._get_auth_token()
+                expires = datetime.now() + timedelta(days=365)
+                expires_str = expires.strftime('%a, %d %b %Y %H:%M:%S GMT')
+                self.send_response(302)
+                self.send_header('Location', self.path)
+                self.send_header('Set-Cookie', f'triptic_auth={token}; Path=/; Expires={expires_str}; SameSite=Strict')
+                self.end_headers()
+                self._set_auth_cookie = False
                 return
 
         if self.path == '/config':
@@ -381,6 +451,10 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_get_asset_group()
         elif self.path.startswith('/video-job/'):
             self._handle_get_video_job_status()
+        elif self.path == '/generation-queue':
+            self._handle_get_generation_queue()
+        elif self.path == '/frame-logs':
+            self._handle_get_frame_logs()
         elif self.path.startswith('/content/assets/'):
             self._handle_get_asset_file()
         elif self.path == '/' or self.path == '':
@@ -393,10 +467,12 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def end_headers(self) -> None:
-        """Add no-cache headers to HTML files and images."""
-        # Add no-cache headers for HTML files and images
+        """Add cache headers based on content type."""
         if hasattr(self, 'path'):
-            if self.path.endswith('.html') or self.path.endswith(('.svg', '.png', '.jpg', '.jpeg', '.gif', '.mp4', '.webm')):
+            # NOTE: /content/assets/ cache headers are set explicitly in _handle_get_asset_file()
+            # to avoid caching error responses
+            # HTML, JS, CSS should not be cached (they may change on deploy)
+            if self.path.endswith(('.html', '.js', '.css')):
                 self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
                 self.send_header('Pragma', 'no-cache')
                 self.send_header('Expires', '0')
@@ -415,6 +491,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_heartbeat(screen_id)
         elif self.path == '/config':
             self._handle_post_config()
+        elif self.path == '/frame-log':
+            self._handle_frame_log()
         elif self.path == '/settings':
             self._handle_post_settings()
         elif self.path == '/playlist':
@@ -433,6 +511,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_add_asset_group_to_playlists()
         elif self.path == '/asset-group/create':
             self._handle_create_asset_group()
+        elif self.path == '/asset-group/create-from-prompt':
+            self._handle_create_asset_group_from_prompt()
         elif self.path.startswith('/asset-group/') and '/regenerate-with-context/' in self.path:
             self._handle_regenerate_with_context()
         elif self.path.startswith('/asset-group/') and '/regenerate/' in self.path:
@@ -445,6 +525,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_duplicate_asset_group()
         elif self.path.startswith('/asset-group/') and '/upload/' in self.path:
             self._handle_upload_image()
+        elif self.path.startswith('/asset-group/') and '/upload-from-url/' in self.path:
+            self._handle_upload_from_url()
         elif self.path.startswith('/asset-group/') and '/video/' in self.path:
             self._handle_generate_video()
         elif self.path.startswith('/asset-group/') and '/flip/' in self.path:
@@ -465,6 +547,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_diff_single_prompt()
         elif self.path == '/admin/generate-thumbnails':
             self._handle_generate_thumbnails()
+        elif self.path == '/generation-queue/cancel':
+            self._handle_cancel_generations()
         else:
             self._send_json_error(404, "Not found")
 
@@ -594,6 +678,65 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             traceback.print_exc()
             self._send_json_error(500, f"Error generating thumbnails: {e}")
 
+    def _handle_get_generation_queue(self) -> None:
+        """Get the current generation queue."""
+        try:
+            queue_items = db.get_generation_queue()
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            self.end_headers()
+            response = json.dumps({'items': queue_items})
+            self.wfile.write(response.encode())
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._send_json_error(500, f"Error getting generation queue: {e}")
+
+    def _handle_cancel_generations(self) -> None:
+        """Cancel selected generation requests."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode())
+
+            uuids = data.get('uuids', [])
+            if not uuids:
+                self._send_json_error(400, "No UUIDs provided")
+                return
+
+            # Cancel the generations in the database
+            canceled_count = db.cancel_generations(uuids)
+
+            # Replace the placeholder images with canceled placeholders
+            from . import storage
+            canceled_placeholder = storage.get_assets_dir() / f"{storage.CANCELED_PLACEHOLDER_UUID}.png"
+
+            for uuid in uuids:
+                # Get the content_uuid for this generation request
+                queue_items = db.get_generation_queue()
+                for item in queue_items:
+                    if item['uuid'] == uuid and item['status'] == 'canceled':
+                        content_uuid = item['content_uuid']
+                        output_path = storage.get_assets_dir() / f"{content_uuid}.png"
+                        if canceled_placeholder.exists() and output_path.exists():
+                            shutil.copy2(canceled_placeholder, output_path)
+                            # Also update thumbnail
+                            storage.create_thumbnail(content_uuid, output_path)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            response = json.dumps({'status': 'ok', 'canceled': canceled_count})
+            self.wfile.write(response.encode())
+            logging.info(f"Canceled {canceled_count} generation requests")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._send_json_error(500, f"Error canceling generations: {e}")
+
     def _handle_get_video_models(self) -> None:
         """Get available video generation models from Gemini API."""
         try:
@@ -655,16 +798,34 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         """Get current playlist items."""
         try:
             current_name = get_current_playlist()
-            items = get_playlist_items(current_name)
 
-            # Check if there's a current asset group override
+            # Check if there's a locked asset group - if so, return only that asset group
             state = read_state()
-            current_asset_group = state.get('current_imageset_override')
+            locked_asset_group = state.get('current_imageset_override')
 
-            # If there's an override, filter items to only that asset group
-            if current_asset_group:
-                items = [item for item in items if item.get('name') == current_asset_group]
-                logging.debug(f"Filtered playlist to current asset group: {current_asset_group}, {len(items)} items")
+            if locked_asset_group:
+                # Get the locked asset group directly, regardless of playlist
+                asset_group = get_asset_group(locked_asset_group)
+                if asset_group:
+                    item = {'name': locked_asset_group}
+                    for screen in ['left', 'center', 'right']:
+                        screen_asset = getattr(asset_group, screen)
+                        if screen_asset and screen_asset.versions:
+                            current_version = screen_asset.get_current_version()
+                            if current_version:
+                                content_uuid = current_version.content
+                                if content_uuid and not content_uuid.startswith('img/'):
+                                    item[screen] = f"/content/assets/{content_uuid}.png"
+                                    item[f"{screen}_thumb"] = f"/content/assets/{content_uuid}_thumb.png"
+                                else:
+                                    item[screen] = f"/img/{screen}/{locked_asset_group}.png"
+                                    item[f"{screen}_thumb"] = f"/img/{screen}/{locked_asset_group}.png"
+                    items = [item]
+                else:
+                    # Locked asset group not found, fall back to playlist
+                    items = get_playlist_items(current_name)
+            else:
+                items = get_playlist_items(current_name)
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -849,6 +1010,164 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             logging.error(f"Error creating asset group: {e}")
             self.send_error(500, f"Error creating asset group: {e}")
+
+    def _handle_create_asset_group_from_prompt(self) -> None:
+        """Create asset group from a prompt using Gemini to generate left/center/right prompts."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode())
+
+            prompt = data.get('prompt', '').strip()
+            playlist_name = data.get('playlist', '').strip()
+            custom_name = data.get('name', '').strip()
+
+            if not prompt:
+                self._send_json_error(400, "Missing prompt")
+                return
+
+            # Use custom name if provided, otherwise generate from prompt (slugify)
+            import re
+            if custom_name:
+                group_id = re.sub(r'[^a-z0-9]+', '-', custom_name.lower())[:50].strip('-')
+            else:
+                group_id = re.sub(r'[^a-z0-9]+', '-', prompt.lower())[:50].strip('-')
+
+            # Ensure unique ID by adding suffix if needed
+            base_id = group_id
+            counter = 1
+            while get_asset_group(group_id):
+                group_id = f"{base_id}-{counter}"
+                counter += 1
+
+            # Use Gemini to generate 3 sub-prompts
+            try:
+                from google import genai
+                from triptic.imgen import get_api_key
+
+                api_key = get_api_key()
+                if not api_key:
+                    self._send_json_error(500, "No Gemini API key configured")
+                    return
+
+                client = genai.Client(api_key=api_key)
+
+                generation_prompt = f"""You are a prompt engineer for Google's Imagen image generation AI.
+
+Given this theme/concept: "{prompt}"
+
+Generate exactly 3 related but distinct image prompts that would work well as a triptych (three-panel artwork).
+Each prompt should be a variation on the theme, offering a different perspective, angle, or interpretation.
+
+Example:
+Theme: "jazz musician"
+Prompts:
+1. "jazz pianist performing at a dimly lit club"
+2. "saxophone player on a street corner at sunset"
+3. "jazz bass player in a recording studio"
+
+Guidelines:
+1. Each prompt should be distinct but thematically connected
+2. Use descriptive language suitable for image generation
+3. Keep each prompt concise (5-15 words)
+4. Ensure they work together as a cohesive visual set
+5. Number them 1, 2, 3 for left, center, right panels
+
+Return ONLY the 3 numbered prompts, nothing else. Format as:
+1. [prompt for left]
+2. [prompt for center]
+3. [prompt for right]"""
+
+                response = client.models.generate_content(
+                    model='gemini-2.0-flash-exp',
+                    contents=generation_prompt
+                )
+
+                # Parse the response to extract the 3 prompts
+                response_text = response.text.strip()
+                lines = [line.strip() for line in response_text.split('\n') if line.strip()]
+
+                sub_prompts = {}
+                panel_names = ['left', 'center', 'right']
+
+                for i, panel in enumerate(panel_names):
+                    prefix = f"{i+1}."
+                    for line in lines:
+                        if line.startswith(prefix):
+                            sub_prompt = line[len(prefix):].strip()
+                            sub_prompts[panel] = sub_prompt
+                            break
+                    if panel not in sub_prompts and i < len(lines):
+                        sub_prompts[panel] = lines[i].lstrip('123.-) ').strip()
+
+                if len(sub_prompts) != 3:
+                    self._send_json_error(500, f"Failed to generate 3 sub-prompts (got {len(sub_prompts)})")
+                    return
+
+                # Create the asset group
+                asset_group = AssetGroup(id=group_id)
+                save_asset_group(asset_group)
+
+                # Add to playlist if specified
+                if playlist_name:
+                    add_to_playlist(playlist_name, group_id)
+
+                # Queue generation for all 3 screens
+                queued = []
+                for screen in ['left', 'center', 'right']:
+                    screen_prompt = sub_prompts[screen]
+                    request_uuid = storage.generate_uuid()
+                    content_uuid = storage.generate_uuid()
+
+                    # Create placeholder
+                    generating_placeholder = storage.get_assets_dir() / f"{storage.GENERATING_PLACEHOLDER_UUID}.png"
+                    output_path = storage.get_assets_dir() / f"{content_uuid}.png"
+                    if generating_placeholder.exists():
+                        shutil.copy2(generating_placeholder, output_path)
+                        storage.create_thumbnail(content_uuid, output_path)
+
+                    # Add version to asset group
+                    version = AssetVersion(
+                        content=content_uuid,
+                        prompt=screen_prompt,
+                        timestamp=datetime.now().isoformat()
+                    )
+                    screen_asset = getattr(asset_group, screen)
+                    screen_asset.add_version(version, set_as_current=True)
+
+                    # Add to generation queue
+                    db.add_to_generation_queue(request_uuid, group_id, screen, screen_prompt, content_uuid)
+                    queued.append({'screen': screen, 'prompt': screen_prompt, 'request_uuid': request_uuid})
+
+                # Save updated asset group with versions
+                save_asset_group(asset_group)
+
+                logging.info(f"[CreateFromPrompt] Created asset group '{group_id}' with prompts: {sub_prompts}")
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                response_data = json.dumps({
+                    'status': 'ok',
+                    'asset_group_id': group_id,
+                    'prompts': sub_prompts,
+                    'playlist': playlist_name or None,
+                    'queued': queued
+                })
+                self.wfile.write(response_data.encode())
+
+            except ImportError:
+                self._send_json_error(500, "google-genai is not installed")
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._send_json_error(500, f"Error generating prompts: {e}")
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._send_json_error(500, f"Error creating asset group from prompt: {e}")
 
     def _handle_delete_asset_group(self) -> None:
         """Delete an asset group."""
@@ -1218,6 +1537,64 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_error(500, f"Error recording heartbeat: {e}")
 
+    def _handle_frame_log(self) -> None:
+        """Receive and store log messages from frames."""
+        global _frame_logs
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode())
+
+            # Add timestamp and store
+            log_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'screen': data.get('screen', 'unknown'),
+                'level': data.get('level', 'log'),
+                'message': data.get('message', ''),
+                'data': data.get('data')
+            }
+
+            _frame_logs.append(log_entry)
+
+            # Keep only last N entries
+            if len(_frame_logs) > _frame_logs_max:
+                _frame_logs = _frame_logs[-_frame_logs_max:]
+
+            # Also log to server log for immediate visibility
+            log_msg = f"[Frame:{log_entry['screen']}] [{log_entry['level']}] {log_entry['message']}"
+            if log_entry['level'] == 'error':
+                logging.error(log_msg)
+            elif log_entry['level'] == 'warn':
+                logging.warning(log_msg)
+            else:
+                logging.info(log_msg)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+        except Exception as e:
+            logging.error(f"Error handling frame log: {e}")
+            self.send_response(200)  # Don't fail frames on log errors
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+
+    def _handle_get_frame_logs(self) -> None:
+        """Return stored frame logs."""
+        try:
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            self.end_headers()
+            response = json.dumps({'logs': _frame_logs})
+            self.wfile.write(response.encode())
+        except Exception as e:
+            self.send_error(500, f"Error getting frame logs: {e}")
+
     def _handle_add_imageset_to_playlists(self) -> None:
         """Add an imageset to one or more playlists."""
         try:
@@ -1346,13 +1723,10 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(500, f"Error deleting imageset: {e}")
 
     def _handle_regenerate_image(self) -> None:
-        """Regenerate a single image in an imageset."""
+        """Queue a regeneration request for a single image."""
         try:
             # Parse path: /imageset/{name}/regenerate/{screen}
             from urllib.parse import unquote
-            from datetime import datetime
-            from triptic import storage
-            from triptic.imgen import generate_image_with_gemini
 
             path_parts = self.path.split('/')
             imageset_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
@@ -1380,55 +1754,59 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json_error(400, "No prompt provided in request")
                 return
 
-            # Get or create asset group
-            asset_group = get_asset_group(imageset_name)
-
-            if not asset_group:
-                # Create new asset group
-                asset_group = AssetGroup(id=imageset_name)
-
-            # Generate UUID for new image
+            # Generate UUIDs for the request and the content
+            request_uuid = storage.generate_uuid()
             content_uuid = storage.generate_uuid()
 
-            # Generate output path
-            assets_dir = storage.get_assets_dir()
-            output_path = assets_dir / f"{content_uuid}.png"
+            # Create "generating" placeholder image
+            generating_placeholder = storage.get_assets_dir() / f"{storage.GENERATING_PLACEHOLDER_UUID}.png"
+            output_path = storage.get_assets_dir() / f"{content_uuid}.png"
+            if generating_placeholder.exists():
+                shutil.copy2(generating_placeholder, output_path)
+                # Also create a thumbnail for the placeholder
+                storage.create_thumbnail(content_uuid, output_path)
 
-            # Generate the image
-            generate_image_with_gemini(prompt, output_path, screen)
+            # Get or create asset group and add placeholder version
+            asset_group = get_asset_group(imageset_name)
+            if not asset_group:
+                asset_group = AssetGroup(id=imageset_name)
 
-            # Create thumbnail
-            storage.create_thumbnail(content_uuid, output_path)
-
-            # Create version and add to asset
             version = AssetVersion(
                 content=content_uuid,
                 prompt=prompt,
                 timestamp=datetime.now().isoformat()
             )
-
-            # Add version to the appropriate screen
             screen_asset = getattr(asset_group, screen)
             screen_asset.add_version(version, set_as_current=True)
-
-            # Save to database
             save_asset_group(asset_group)
 
+            # Add to generation queue
+            db.add_to_generation_queue(request_uuid, imageset_name, screen, prompt, content_uuid)
+
+            logging.info(f"[Queue] Added: {imageset_name}/{screen} (uuid={request_uuid})")
+
+            # Return immediately
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            response = json.dumps({'status': 'ok', 'regenerated': screen})
+            response = json.dumps({
+                'status': 'queued',
+                'screen': screen,
+                'request_uuid': request_uuid,
+                'content_uuid': content_uuid
+            })
             self.wfile.write(response.encode())
         except Exception as e:
-            logging.error(f"Error regenerating image: {e}", exc_info=True)
-            self._send_json_error(500, f"Error regenerating image: {e}")
+            logging.error(f"Error queueing image generation: {e}", exc_info=True)
+            self._send_json_error(500, f"Error queueing image generation: {e}")
 
     def _handle_regenerate_with_context(self) -> None:
-        """Regenerate an image using the other two images as context, creating a new version."""
+        """Regenerate an image using the other two images as context (runs in background thread)."""
         try:
             from urllib.parse import unquote
             from . import storage
+            import threading
 
             path_parts = self.path.split('/')
             asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
@@ -1485,51 +1863,70 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
 
             # Generate new UUID for output
             new_uuid = storage.generate_uuid()
-            assets_dir = storage.get_assets_dir()
-            output_path = assets_dir / f"{new_uuid}.png"
 
-            # Regenerate with context
-            from triptic.imgen import generate_image_with_context
-            generate_image_with_context(prompt, output_path, screen, context_images)
+            # Start background generation
+            def generate_in_background():
+                try:
+                    from triptic.imgen import generate_image_with_context
 
-            # Create thumbnail
-            storage.create_thumbnail(new_uuid, output_path)
+                    logging.info(f"[BG] Starting context generation for {asset_group_name}/{screen}")
 
-            # Create new version
-            new_version = AssetVersion(
-                version_uuid=new_uuid,
-                content=new_uuid,
-                prompt=prompt,
-                timestamp=datetime.now().isoformat()
-            )
-            screen_asset.add_version(new_version, set_as_current=True)
+                    assets_dir = storage.get_assets_dir()
+                    output_path = assets_dir / f"{new_uuid}.png"
 
-            # Save to database
-            save_asset_group(asset_group)
+                    # Regenerate with context (this is the slow part)
+                    generate_image_with_context(prompt, output_path, screen, context_images)
 
+                    # Create thumbnail
+                    storage.create_thumbnail(new_uuid, output_path)
+
+                    # Reload asset group to get fresh state
+                    asset_group_fresh = get_asset_group(asset_group_name)
+                    screen_asset_fresh = getattr(asset_group_fresh, screen)
+
+                    # Create new version
+                    new_version = AssetVersion(
+                        version_uuid=new_uuid,
+                        content=new_uuid,
+                        prompt=prompt,
+                        timestamp=datetime.now().isoformat()
+                    )
+                    screen_asset_fresh.add_version(new_version, set_as_current=True)
+
+                    # Save to database
+                    save_asset_group(asset_group_fresh)
+
+                    logging.info(f"[BG] Completed context generation for {asset_group_name}/{screen}")
+                except Exception as e:
+                    logging.error(f"[BG] Error generating {asset_group_name}/{screen} with context: {e}", exc_info=True)
+
+            # Start background thread
+            thread = threading.Thread(target=generate_in_background, daemon=True)
+            thread.start()
+
+            # Return immediately
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             response = json.dumps({
-                'status': 'ok',
-                'regenerated': screen,
+                'status': 'started',
+                'screen': screen,
                 'with_context': context_screens,
-                'new_uuid': new_uuid
+                'uuid': new_uuid
             })
             self.wfile.write(response.encode())
-
-            logging.info(f"Regenerated {screen} with context for '{asset_group_name}', created version {new_uuid}")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.send_error(500, f"Error regenerating image with context: {e}")
+            self.send_error(500, f"Error starting context regeneration: {e}")
 
     def _handle_edit_image(self) -> None:
-        """Edit an image using Gemini's edit_image API, creating a new version."""
+        """Edit an image using Gemini's edit_image API (runs in background thread)."""
         try:
             from urllib.parse import unquote
             from . import storage
+            import threading
 
             path_parts = self.path.split('/')
             asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
@@ -1571,48 +1968,67 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(404, "Source image file not found")
                 return
 
+            original_prompt = current_version.prompt
+
             # Generate new UUID for edited image
             new_uuid = storage.generate_uuid()
-            assets_dir = storage.get_assets_dir()
-            output_path = assets_dir / f"{new_uuid}.png"
 
-            # Edit the image (source -> output)
-            from triptic.imgen import edit_image_with_gemini
-            edit_image_with_gemini(edit_prompt, source_path, output_path)
+            # Start background editing
+            def edit_in_background():
+                try:
+                    from triptic.imgen import edit_image_with_gemini
 
-            # Create thumbnail
-            storage.create_thumbnail(new_uuid, output_path)
+                    logging.info(f"[BG] Starting edit for {asset_group_name}/{screen}")
 
-            # Create new version with combined prompt
-            combined_prompt = f"{current_version.prompt}\n[Edit: {edit_prompt}]" if current_version.prompt else edit_prompt
-            new_version = AssetVersion(
-                version_uuid=new_uuid,
-                content=new_uuid,
-                prompt=combined_prompt,
-                timestamp=datetime.now().isoformat()
-            )
-            screen_asset.add_version(new_version, set_as_current=True)
+                    assets_dir = storage.get_assets_dir()
+                    output_path = assets_dir / f"{new_uuid}.png"
 
-            # Save to database
-            save_asset_group(asset_group)
+                    # Edit the image (this is the slow part)
+                    edit_image_with_gemini(edit_prompt, source_path, output_path)
 
+                    # Create thumbnail
+                    storage.create_thumbnail(new_uuid, output_path)
+
+                    # Reload asset group to get fresh state
+                    asset_group_fresh = get_asset_group(asset_group_name)
+                    screen_asset_fresh = getattr(asset_group_fresh, screen)
+
+                    # Create new version with combined prompt
+                    combined_prompt = f"{original_prompt}\n[Edit: {edit_prompt}]" if original_prompt else edit_prompt
+                    new_version = AssetVersion(
+                        version_uuid=new_uuid,
+                        content=new_uuid,
+                        prompt=combined_prompt,
+                        timestamp=datetime.now().isoformat()
+                    )
+                    screen_asset_fresh.add_version(new_version, set_as_current=True)
+
+                    # Save to database
+                    save_asset_group(asset_group_fresh)
+
+                    logging.info(f"[BG] Completed edit for {asset_group_name}/{screen}")
+                except Exception as e:
+                    logging.error(f"[BG] Error editing {asset_group_name}/{screen}: {e}", exc_info=True)
+
+            # Start background thread
+            thread = threading.Thread(target=edit_in_background, daemon=True)
+            thread.start()
+
+            # Return immediately
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             response = json.dumps({
-                'status': 'ok',
-                'edited': screen,
-                'new_uuid': new_uuid,
-                'image_url': f'/content/assets/{new_uuid}.png'
+                'status': 'started',
+                'screen': screen,
+                'uuid': new_uuid
             })
             self.wfile.write(response.encode())
-
-            logging.info(f"Edited {screen} image for '{asset_group_name}', created version {new_uuid}")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.send_error(500, f"Error editing image: {e}")
+            self.send_error(500, f"Error starting image edit: {e}")
 
     def _handle_upload_image(self) -> None:
         """Upload an image for a screen, creating a new version."""
@@ -1689,6 +2105,104 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self.send_error(500, f"Error uploading image: {e}")
+
+    def _handle_upload_from_url(self) -> None:
+        """Upload an image from a URL for a screen, creating a new version."""
+        try:
+            from urllib.parse import unquote
+            import uuid
+            import urllib.request
+            from . import storage
+
+            # Parse path: /asset-group/{name}/upload-from-url/{screen}
+            path_parts = self.path.split('/')
+            asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
+            screen = path_parts[4] if len(path_parts) > 4 else None
+
+            if not asset_group_name or not screen:
+                self.send_error(400, "Missing asset group name or screen")
+                return
+
+            if screen not in ['left', 'center', 'right']:
+                self.send_error(400, "Invalid screen name")
+                return
+
+            # Read the JSON body with URL
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode('utf-8'))
+
+            image_url = data.get('url')
+            prompt = data.get('prompt', f'Uploaded from URL: {image_url}')
+
+            if not image_url:
+                self.send_error(400, "Missing 'url' in request body")
+                return
+
+            # Fetch the image from URL
+            logging.info(f"Fetching image from URL: {image_url}")
+            req = urllib.request.Request(
+                image_url,
+                headers={'User-Agent': 'Triptic/1.0'}
+            )
+            with urllib.request.urlopen(req, timeout=30) as response:
+                image_data = response.read()
+
+            if not image_data:
+                self.send_error(400, "Failed to fetch image from URL")
+                return
+
+            # Get or create asset group from database
+            asset_group = get_asset_group(asset_group_name)
+            if not asset_group:
+                # Create new asset group if it doesn't exist
+                asset_group = AssetGroup(id=asset_group_name)
+
+            # Create a new UUID for the uploaded image
+            new_uuid = str(uuid.uuid4())
+            assets_dir = storage.get_assets_dir()
+            new_path = assets_dir / f"{new_uuid}.png"
+
+            # Save the uploaded image
+            new_path.write_bytes(image_data)
+
+            # Create thumbnail
+            storage.create_thumbnail_from_bytes(new_uuid, image_data)
+
+            # Create a new version for the screen
+            screen_asset = getattr(asset_group, screen)
+            new_version = AssetVersion(
+                version_uuid=new_uuid,
+                content=new_uuid,
+                prompt=prompt,
+                timestamp=datetime.now().isoformat()
+            )
+            screen_asset.add_version(new_version, set_as_current=True)
+
+            # Save to database
+            save_asset_group(asset_group)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            response = json.dumps({
+                'status': 'ok',
+                'uploaded': screen,
+                'new_uuid': new_uuid,
+                'image_url': f'/content/assets/{new_uuid}.png',
+                'source_url': image_url
+            })
+            self.wfile.write(response.encode())
+
+            logging.info(f"Uploaded image from URL to {screen} for '{asset_group_name}', created version {new_uuid}")
+        except urllib.error.URLError as e:
+            logging.error(f"Error fetching image from URL: {e}")
+            self.send_error(400, f"Error fetching image from URL: {e}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.send_error(500, f"Error uploading image from URL: {e}")
 
     def _handle_generate_video(self) -> None:
         """Generate a video from an image using Google Veo API (async)."""
@@ -1828,8 +2342,23 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             assets_dir = storage.get_assets_dir()
             file_path = assets_dir / filename
 
+            logging.info(f"Asset request: {self.path} -> {file_path} (exists: {file_path.exists()})")
+
             if not file_path.exists():
+                logging.info(f"Asset not found: {file_path}")
                 self.send_error(404, "Asset not found")
+                return
+
+            # Generate ETag from filename (UUID is unique per content)
+            # Strip extension to get just the UUID part
+            etag = f'"{filename.rsplit(".", 1)[0]}"'
+
+            # Check If-None-Match header for conditional request
+            if_none_match = self.headers.get('If-None-Match')
+            if if_none_match and if_none_match == etag:
+                logging.info(f"Asset 304: {file_path}")
+                self.send_response(304)
+                self.end_headers()
                 return
 
             # Determine content type
@@ -1838,15 +2367,24 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             if content_type is None:
                 content_type = 'application/octet-stream'
 
-            # Send the file
+            # Get file size for Content-Length
+            file_size = file_path.stat().st_size
+
+            logging.info(f"Asset 200: {file_path} ({file_size} bytes)")
+
+            # Send the file with long cache (UUID-based files are immutable)
             self.send_response(200)
             self.send_header('Content-type', content_type)
+            self.send_header('Content-Length', str(file_size))
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+            self.send_header('ETag', etag)
             self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=31536000')  # Cache for 1 year
             self.end_headers()
 
             with open(file_path, 'rb') as f:
                 self.wfile.write(f.read())
+
+            logging.info(f"Asset served: {file_path}")
 
         except Exception as e:
             import traceback
@@ -2892,7 +3430,8 @@ def get_config() -> dict:
     """Get configuration from SQLite database."""
     return {
         'frequency': db.get_setting_db('frequency', 60),  # Default to 60 seconds
-        'poll_interval': db.get_setting_db('poll_interval', 1000)  # Default to 1000ms (1 second)
+        'poll_interval': db.get_setting_db('poll_interval', 1000),  # Default to 1000ms (1 second)
+        'frame_reload_minutes': db.get_setting_db('frame_reload_minutes', 10)  # Default to 10 minutes
     }
 
 
@@ -2902,6 +3441,8 @@ def update_config(config: dict) -> None:
         db.set_setting_db('frequency', config['frequency'])
     if 'poll_interval' in config:
         db.set_setting_db('poll_interval', config['poll_interval'])
+    if 'frame_reload_minutes' in config:
+        db.set_setting_db('frame_reload_minutes', config['frame_reload_minutes'])
 
 
 def get_settings() -> dict:
@@ -3248,12 +3789,12 @@ def discover_imagesets(prefix: str = None) -> dict:
 
     Supports two patterns:
     1. New pattern: img/prefix/name.screen.ext (e.g., img/numbers/1.left.png)
-    2. Old pattern: img/screen/name.ext (e.g., img/left/1.svg) - grouped by extension
+    2. Old pattern: img/screen/name.ext (e.g., img/left/1.png) - grouped by extension
 
     Returns a dict mapping imageset names to their files:
     {
         'numbers/1': {'left': 'img/numbers/1.left.png', 'center': ..., 'right': ...},
-        'svg/1': {'left': 'img/left/1.svg', 'center': ..., 'right': ...},
+        'png/1': {'left': 'img/left/1.png', 'center': ..., 'right': ...},
     }
     """
     try:
@@ -3267,7 +3808,7 @@ def discover_imagesets(prefix: str = None) -> dict:
         imagesets = defaultdict(dict)
         old_pattern_files = defaultdict(lambda: defaultdict(dict))  # {ext: {name: {screen: path}}}
         screens = ['left', 'center', 'right']
-        extensions = ['.png', '.jpg', '.jpeg', '.svg', '.gif', '.mp4', '.webm']
+        extensions = ['.png', '.jpg', '.jpeg', '.gif', '.mp4', '.webm']
 
         # Walk through all files in img directory
         for file_path in img_dir.rglob('*'):
@@ -3776,6 +4317,96 @@ def ensure_content_symlink() -> None:
         logging.info(f"Created symlink: {public_img} -> {content_img}")
 
 
+# Global flag to control the generation worker
+_generation_worker_running = False
+
+# Frame logs storage (circular buffer)
+_frame_logs = []
+_frame_logs_max = 500  # Keep last 500 log entries
+
+
+def start_generation_worker() -> threading.Thread:
+    """Start the background generation queue worker."""
+    global _generation_worker_running
+    _generation_worker_running = True
+
+    def worker():
+        """Process generation queue items."""
+        logging.info("[GenWorker] Started generation queue worker")
+
+        while _generation_worker_running:
+            try:
+                # Get next pending item
+                item = db.get_pending_generation()
+
+                if not item:
+                    # No pending items, sleep briefly
+                    import time
+                    time.sleep(2)
+                    continue
+
+                uuid = item['uuid']
+                asset_group_name = item['asset_group_name']
+                screen = item['screen']
+                prompt = item['prompt']
+                content_uuid = item['content_uuid']
+
+                logging.info(f"[GenWorker] Processing: {asset_group_name}/{screen}")
+
+                # Mark as processing
+                db.update_generation_status(uuid, 'processing')
+
+                try:
+                    from triptic.imgen import generate_image_with_gemini
+
+                    # Generate the image
+                    assets_dir = storage.get_assets_dir()
+                    output_path = assets_dir / f"{content_uuid}.png"
+
+                    generate_image_with_gemini(prompt, output_path, screen)
+
+                    # Create thumbnail
+                    storage.create_thumbnail(content_uuid, output_path)
+
+                    # Note: We don't need to update the asset group here because
+                    # the placeholder version was already created with the same content_uuid.
+                    # The generated image overwrites the placeholder file at the same path.
+
+                    # Mark as completed
+                    db.update_generation_status(uuid, 'completed')
+                    logging.info(f"[GenWorker] Completed: {asset_group_name}/{screen}")
+
+                except Exception as e:
+                    logging.error(f"[GenWorker] Failed: {asset_group_name}/{screen}: {e}", exc_info=True)
+                    db.update_generation_status(uuid, 'failed', str(e))
+
+                    # Replace with canceled placeholder on failure
+                    try:
+                        canceled_path = storage.get_assets_dir() / f"{storage.CANCELED_PLACEHOLDER_UUID}.png"
+                        if canceled_path.exists():
+                            output_path = storage.get_assets_dir() / f"{content_uuid}.png"
+                            shutil.copy2(canceled_path, output_path)
+                    except Exception:
+                        pass
+
+            except Exception as e:
+                logging.error(f"[GenWorker] Error in worker loop: {e}", exc_info=True)
+                import time
+                time.sleep(5)  # Sleep on error to avoid tight loop
+
+        logging.info("[GenWorker] Stopped generation queue worker")
+
+    thread = threading.Thread(target=worker, daemon=True, name="GenWorker")
+    thread.start()
+    return thread
+
+
+def stop_generation_worker() -> None:
+    """Stop the generation worker."""
+    global _generation_worker_running
+    _generation_worker_running = False
+
+
 def run_server(port: int = 3000, host: str = "localhost") -> None:
     """Run the server in the foreground."""
     # Set up logging first
@@ -3790,6 +4421,11 @@ def run_server(port: int = 3000, host: str = "localhost") -> None:
     logging.info("Initializing SQLite database...")
     db.init_database()
     logging.info("Database initialized")
+
+    # Initialize generation queue table
+    logging.info("Initializing generation queue...")
+    db.init_generation_queue_table()
+    logging.info("Generation queue initialized")
 
     # Run UUID versioning migration
     db.migrate_to_uuid_versioning()
@@ -3806,11 +4442,17 @@ def run_server(port: int = 3000, host: str = "localhost") -> None:
     logging.info("URLs:")
     logging.info(f"  Dashboard:  http://{host}:{port}/")
     logging.info(f"  Playlists:  http://{host}:{port}/playlists.html")
+    logging.info(f"  Queue:      http://{host}:{port}/queue.html")
     logging.info(f"  Left:       http://{host}:{port}/?id=left")
     logging.info(f"  Center:     http://{host}:{port}/?id=center")
     logging.info(f"  Right:      http://{host}:{port}/?id=right")
     logging.info("")
     logging.info("Press Ctrl+C to stop")
+
+    # Start the generation queue worker
+    logging.info("Starting generation queue worker...")
+    gen_worker = start_generation_worker()
+    logging.info("Generation queue worker started")
 
     handler = lambda *args, **kwargs: TripticHandler(
         *args, directory=str(public_dir), **kwargs
@@ -3825,6 +4467,7 @@ def run_server(port: int = 3000, host: str = "localhost") -> None:
     except KeyboardInterrupt:
         logging.info("\nShutting down...")
     finally:
+        stop_generation_worker()
         httpd.shutdown()
         httpd.server_close()
         logging.info("Server stopped")

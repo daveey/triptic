@@ -197,6 +197,43 @@
             border-radius: 4px;
         }
 
+        .queue-status {
+            font-family: monospace;
+            font-size: 14px;
+            color: #16e0bd;
+            background: #1a1a2e;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .queue-status.empty {
+            color: #666;
+        }
+
+        .queue-status.active {
+            color: #16e0bd;
+        }
+
+        .queue-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .queue-dot.active {
+            background: #16e0bd;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
         .navigation-controls {
             display: flex;
             justify-content: center;
@@ -241,6 +278,502 @@
         .current-asset-group:hover {
             background: #252542;
             color: #1df5d0;
+        }
+
+        .lock-button {
+            background: #1a1a2e;
+            border: 2px solid #0f3460;
+            color: #888;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .lock-button:hover {
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .lock-button.locked {
+            background: #e94560;
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .lock-button.locked:hover {
+            background: #ff6b6b;
+            border-color: #ff6b6b;
+        }
+
+        .lock-icon {
+            font-size: 16px;
+        }
+
+        /* Mobile View Styles */
+        .mobile-view {
+            display: none;
+            padding: 20px;
+            padding-top: 60px;
+        }
+
+        .mobile-view.active {
+            display: block;
+        }
+
+        .desktop-view {
+            display: block;
+        }
+
+        .desktop-view.hidden {
+            display: none;
+        }
+
+        .mobile-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .mobile-header h1 {
+            font-size: 24px;
+            color: #16e0bd;
+            margin-bottom: 5px;
+        }
+
+        .mobile-header .subtitle {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .mobile-section {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .mobile-section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin-bottom: 15px;
+        }
+
+        .mobile-playlist-select {
+            width: 100%;
+            background: #1a1a2e;
+            border: 2px solid #0f3460;
+            color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 18px;
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+
+        .mobile-current-asset {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .mobile-current-asset .asset-name {
+            font-size: 20px;
+            color: #16e0bd;
+            margin-bottom: 10px;
+            word-break: break-word;
+        }
+
+        .mobile-current-asset .position {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .mobile-asset-select-wrapper {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .mobile-asset-search {
+            width: 100%;
+            background: #0f0c29;
+            border: 2px solid #0f3460;
+            color: #fff;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .mobile-asset-search:focus {
+            outline: none;
+            border-color: #16e0bd;
+        }
+
+        .mobile-asset-search::placeholder {
+            color: #666;
+        }
+
+        .mobile-asset-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1a1a2e;
+            border: 2px solid #0f3460;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+
+        .mobile-asset-dropdown.active {
+            display: block;
+        }
+
+        .mobile-asset-option {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #0f3460;
+            font-size: 14px;
+        }
+
+        .mobile-asset-option:last-child {
+            border-bottom: none;
+        }
+
+        .mobile-asset-option:hover, .mobile-asset-option.selected {
+            background: #0f3460;
+        }
+
+        .mobile-asset-option.current {
+            color: #16e0bd;
+            font-weight: bold;
+        }
+
+        .mobile-asset-option .option-index {
+            color: #666;
+            margin-right: 8px;
+            font-size: 12px;
+        }
+
+        .mobile-nav-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .mobile-nav-btn {
+            flex: 1;
+            background: #e94560;
+            border: none;
+            color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .mobile-nav-btn:hover, .mobile-nav-btn:active {
+            background: #ff6b6b;
+        }
+
+        .mobile-lock-btn {
+            width: 100%;
+            background: #1a1a2e;
+            border: 3px solid #0f3460;
+            color: #888;
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .mobile-lock-btn.locked {
+            background: #e94560;
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .mobile-lock-btn .lock-icon {
+            font-size: 24px;
+        }
+
+        .mobile-new-btn {
+            width: 100%;
+            background: #16e0bd;
+            border: none;
+            color: #1a1a2e;
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .mobile-new-btn:hover, .mobile-new-btn:active {
+            background: #1af5d3;
+        }
+
+        .mobile-new-btn .new-icon {
+            font-size: 24px;
+        }
+
+        /* Modal styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #16213e;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #0f3460;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: #fff;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            background: #1a1a2e;
+            border: 2px solid #0f3460;
+            color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #16e0bd;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #0f3460;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn-cancel {
+            background: #1a1a2e;
+            border: 2px solid #0f3460;
+            color: #888;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .btn-cancel:hover {
+            border-color: #888;
+            color: #fff;
+        }
+
+        .btn-create {
+            background: #16e0bd;
+            border: none;
+            color: #1a1a2e;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-create:hover {
+            background: #1af5d3;
+        }
+
+        .btn-create:disabled {
+            background: #888;
+            cursor: not-allowed;
+        }
+
+        .create-status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .create-status.loading {
+            display: block;
+            background: #0f3460;
+            color: #16e0bd;
+        }
+
+        .create-status.success {
+            display: block;
+            background: #0f4d3a;
+            color: #16e0bd;
+        }
+
+        .create-status.error {
+            display: block;
+            background: #4d0f0f;
+            color: #e94560;
+        }
+
+        .mobile-view-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            color: #888;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        .mobile-view-toggle:hover {
+            color: #fff;
+            border-color: #e94560;
+        }
+
+        .mobile-preview {
+            margin-top: 20px;
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
+
+        .mobile-preview-frame {
+            width: 80px;
+            height: 142px;
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .mobile-preview-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .mobile-time {
+            text-align: center;
+            font-family: monospace;
+            font-size: 32px;
+            color: #e94560;
+            margin-bottom: 10px;
+        }
+
+        /* Auto-detect mobile */
+        @media (max-width: 768px) {
+            .mobile-view {
+                display: block;
+            }
+            .desktop-view {
+                display: none;
+            }
+            .mobile-view.hidden {
+                display: none;
+            }
+            .desktop-view.force-show {
+                display: block;
+            }
+            body {
+                padding-top: 0;
+                padding-bottom: 0;
+            }
+            .top-nav {
+                display: none;
+            }
         }
 
         .url-display {
@@ -288,6 +821,82 @@
 <body>
     <script src="/shared/nav.js"></script>
 
+    <!-- View Toggle Button -->
+    <button class="mobile-view-toggle" id="view-toggle" onclick="toggleViewMode()">Desktop View</button>
+
+    <!-- Mobile View -->
+    <div class="mobile-view" id="mobile-view">
+        <div class="mobile-header">
+            <h1>Triptic Remote</h1>
+            <div class="subtitle" id="mobile-time">--:--:--</div>
+            <div class="subtitle" id="mobile-queue-status" style="color: #666; margin-top: 5px;">Queue: 0</div>
+        </div>
+
+        <div class="mobile-section">
+            <div class="mobile-section-title">Playlist</div>
+            <select class="mobile-playlist-select" id="mobile-playlist">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+
+        <div class="mobile-section">
+            <div class="mobile-section-title">Now Playing <span id="mobile-position" style="float: right; color: #16e0bd;">-- / --</span></div>
+            <div class="mobile-asset-select-wrapper">
+                <input type="text" class="mobile-asset-search" id="mobile-asset-search" placeholder="Search or tap to select..." autocomplete="off">
+                <div class="mobile-asset-dropdown" id="mobile-asset-dropdown"></div>
+            </div>
+            <div class="mobile-preview" id="mobile-preview">
+                <div class="mobile-preview-frame"><img id="mobile-preview-left" src="" alt="Left"></div>
+                <div class="mobile-preview-frame"><img id="mobile-preview-center" src="" alt="Center"></div>
+                <div class="mobile-preview-frame"><img id="mobile-preview-right" src="" alt="Right"></div>
+            </div>
+            <div class="mobile-nav-buttons">
+                <button type="button" class="mobile-nav-btn" onclick="previousAssetGroup()">&#9664; Prev</button>
+                <button type="button" class="mobile-nav-btn" onclick="nextAssetGroup()">Next &#9654;</button>
+            </div>
+        </div>
+
+        <div class="mobile-section">
+            <button type="button" class="mobile-lock-btn" id="mobile-lock-btn" onclick="toggleLock()">
+                <span class="lock-icon" id="mobile-lock-icon">&#128275;</span>
+                <span id="mobile-lock-text">Unlocked - Auto Cycling</span>
+            </button>
+            <button type="button" class="mobile-new-btn" onclick="openNewAssetModal()">
+                <span class="new-icon">+</span>
+                <span>New Asset Group</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- New Asset Modal -->
+    <div class="modal-overlay" id="new-asset-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create New Asset Group</h2>
+                <button class="modal-close" onclick="closeNewAssetModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="create-status" id="create-status"></div>
+                <div class="form-group">
+                    <label for="new-asset-prompt">Theme / Concept</label>
+                    <textarea id="new-asset-prompt" placeholder="e.g., 'cyberpunk cityscape at night' or 'peaceful zen garden'"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="new-asset-playlist">Add to Playlist</label>
+                    <select id="new-asset-playlist">
+                        <option value="">-- Select Playlist --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeNewAssetModal()">Cancel</button>
+                <button class="btn-create" id="btn-create-asset" onclick="createAssetFromPrompt()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Desktop View -->
+    <div class="desktop-view" id="desktop-view">
     <div class="controls">
         <label>
             Scale:
@@ -331,13 +940,28 @@
             </select>
         </label>
         <label>
+            Frame Reload:
+            <select id="frame-reload">
+                <option value="5">5 min</option>
+                <option value="10" selected>10 min</option>
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hour</option>
+                <option value="0">Never</option>
+            </select>
+        </label>
+        <label>
             Playlist:
             <select id="playlist">
                 <option value="">Loading...</option>
             </select>
         </label>
-        <button onclick="reloadScreens()">Reload Screens</button>
+        <button type="button" onclick="reloadScreens()">Reload Screens</button>
         <div class="time-display" id="time">--:--:--</div>
+        <div class="queue-status empty" id="queue-status">
+            <span class="queue-dot"></span>
+            <span id="queue-text">Queue: 0</span>
+        </div>
         <div id="save-indicator" style="display: none; color: #4caf50; font-size: 12px; padding: 8px;">✓ Saved</div>
     </div>
 
@@ -380,13 +1004,18 @@
     </div>
 
     <div class="navigation-controls">
-        <button onclick="previousAssetGroup()">< Prev</button>
+        <button type="button" onclick="previousAssetGroup()">&larr; Prev</button>
         <div style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
             <a href="#" id="current-asset-group-link" class="current-asset-group">Loading...</a>
             <div id="playlist-info" style="color: #888; font-size: 14px;"></div>
         </div>
-        <button onclick="nextAssetGroup()">Next ></button>
+        <button type="button" onclick="nextAssetGroup()">Next &rarr;</button>
+        <button type="button" id="lock-button" class="lock-button" onclick="toggleLock()">
+            <span class="lock-icon" id="lock-icon">&#128275;</span>
+            <span id="lock-text">Unlocked</span>
+        </button>
     </div>
+    </div><!-- End desktop-view -->
 
     <script>
         // Original screen dimensions (portrait)
@@ -448,6 +1077,20 @@
         let currentPlaylistAssetGroups = [];
         let currentAssetGroupIndex = -1;
         let currentAssetGroupName = '';
+        let currentPlaylistName = '';  // Current playlist name
+        let availablePlaylists = [];  // All available playlists
+        let manualOverrideActive = false;  // Set when user clicks next/prev
+        let isLocked = false;  // Track lock state
+
+        // Calculate time-based index (same algorithm as index.html frames use)
+        function getTimeBasedIndex(itemCount) {
+            if (itemCount <= 0) return 0;
+            const frequency = parseInt(document.getElementById('frequency').value) || 60;
+            const now = new Date();
+            const totalSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+            const cycleNumber = Math.floor(totalSeconds / frequency);
+            return cycleNumber % itemCount;
+        }
 
         function updateAssetGroupDisplay(assetGroupName) {
             console.log('[updateAssetGroupDisplay] Called with assetGroupName:', assetGroupName);
@@ -552,6 +1195,7 @@
                 console.log('[nextAssetGroup] No asset groups in playlist');
                 return;
             }
+            manualOverrideActive = true;  // User is manually navigating
             currentAssetGroupIndex = (currentAssetGroupIndex + 1) % currentPlaylistAssetGroups.length;
             console.log('[nextAssetGroup] New index:', currentAssetGroupIndex);
             console.log('[nextAssetGroup] Advanced to:', currentPlaylistAssetGroups[currentAssetGroupIndex]);
@@ -561,7 +1205,7 @@
             // Update the display
             updateAssetGroupDisplay(assetGroupName);
 
-            // Update server state so screens know which asset group to display
+            // Auto-lock and update server state so frames show selected asset
             try {
                 await fetch('/state/current-asset-group', {
                     method: 'POST',
@@ -569,10 +1213,72 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({ asset_group: assetGroupName })
                 });
+                // Auto-lock when manually navigating
+                if (!isLocked) {
+                    isLocked = true;
+                    updateLockUI();
+                    updateMobileLockUI();
+                }
             } catch (err) {
                 console.error('[nextAssetGroup] Failed to update server state:', err);
             }
-            // Frames will pick up the change via polling
+        }
+
+        function updateLockUI() {
+            const button = document.getElementById('lock-button');
+            const icon = document.getElementById('lock-icon');
+            const text = document.getElementById('lock-text');
+
+            if (isLocked) {
+                button.classList.add('locked');
+                icon.innerHTML = '&#128274;';  // Locked padlock
+                text.textContent = 'Locked';
+            } else {
+                button.classList.remove('locked');
+                icon.innerHTML = '&#128275;';  // Unlocked padlock
+                text.textContent = 'Unlocked';
+            }
+        }
+
+        async function toggleLock() {
+            if (isLocked) {
+                // Unlock: clear the override
+                try {
+                    await fetch('/state/current-asset-group', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ asset_group: null })
+                    });
+                    isLocked = false;
+                    manualOverrideActive = false;
+                    updateLockUI();
+                    // Resume time-based rotation
+                    if (currentPlaylistAssetGroups.length > 0) {
+                        currentAssetGroupIndex = getTimeBasedIndex(currentPlaylistAssetGroups.length);
+                        updateAssetGroupDisplay(currentPlaylistAssetGroups[currentAssetGroupIndex]);
+                    }
+                } catch (err) {
+                    console.error('[toggleLock] Failed to unlock:', err);
+                }
+            } else {
+                // Lock: set the current asset group as override
+                if (currentAssetGroupName) {
+                    try {
+                        await fetch('/state/current-asset-group', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            credentials: 'same-origin',
+                            body: JSON.stringify({ asset_group: currentAssetGroupName })
+                        });
+                        isLocked = true;
+                        manualOverrideActive = true;
+                        updateLockUI();
+                    } catch (err) {
+                        console.error('[toggleLock] Failed to lock:', err);
+                    }
+                }
+            }
         }
 
         async function previousAssetGroup() {
@@ -584,6 +1290,7 @@
                 console.log('[previousAssetGroup] No asset groups in playlist');
                 return;
             }
+            manualOverrideActive = true;  // User is manually navigating
             currentAssetGroupIndex = (currentAssetGroupIndex - 1 + currentPlaylistAssetGroups.length) % currentPlaylistAssetGroups.length;
             console.log('[previousAssetGroup] New index:', currentAssetGroupIndex);
             console.log('[previousAssetGroup] Advanced to:', currentPlaylistAssetGroups[currentAssetGroupIndex]);
@@ -593,7 +1300,7 @@
             // Update the display
             updateAssetGroupDisplay(assetGroupName);
 
-            // Update server state so screens know which asset group to display
+            // Auto-lock and update server state so frames show selected asset
             try {
                 await fetch('/state/current-asset-group', {
                     method: 'POST',
@@ -601,10 +1308,15 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({ asset_group: assetGroupName })
                 });
+                // Auto-lock when manually navigating
+                if (!isLocked) {
+                    isLocked = true;
+                    updateLockUI();
+                    updateMobileLockUI();
+                }
             } catch (err) {
                 console.error('[previousAssetGroup] Failed to update server state:', err);
             }
-            // Frames will pick up the change via polling
         }
 
         function updateTime() {
@@ -613,6 +1325,57 @@
             const minutes = String(now.getMinutes()).padStart(2, '0');
             const seconds = String(now.getSeconds()).padStart(2, '0');
             document.getElementById('time').textContent = `${hours}:${minutes}:${seconds}`;
+
+            // Keep label in sync with time-based rotation (same as frames)
+            // Only auto-sync if user hasn't manually navigated
+            if (!manualOverrideActive && currentPlaylistAssetGroups.length > 0) {
+                const newIndex = getTimeBasedIndex(currentPlaylistAssetGroups.length);
+                if (newIndex !== currentAssetGroupIndex) {
+                    currentAssetGroupIndex = newIndex;
+                    updateAssetGroupDisplay(currentPlaylistAssetGroups[currentAssetGroupIndex]);
+                }
+            }
+        }
+
+        async function updateQueueStatus() {
+            try {
+                const response = await fetch('/generation-queue', { credentials: 'same-origin' });
+                if (response.ok) {
+                    const data = await response.json();
+                    const queueLength = data.queue ? data.queue.length : 0;
+
+                    // Update desktop indicator
+                    const queueStatus = document.getElementById('queue-status');
+                    const queueText = document.getElementById('queue-text');
+                    const queueDot = queueStatus.querySelector('.queue-dot');
+
+                    if (queueLength > 0) {
+                        queueStatus.classList.remove('empty');
+                        queueStatus.classList.add('active');
+                        queueDot.classList.add('active');
+                        queueText.textContent = `Gen: ${queueLength}`;
+                    } else {
+                        queueStatus.classList.remove('active');
+                        queueStatus.classList.add('empty');
+                        queueDot.classList.remove('active');
+                        queueText.textContent = 'Gen: 0';
+                    }
+
+                    // Update mobile indicator
+                    const mobileQueueStatus = document.getElementById('mobile-queue-status');
+                    if (mobileQueueStatus) {
+                        if (queueLength > 0) {
+                            mobileQueueStatus.style.color = '#16e0bd';
+                            mobileQueueStatus.textContent = `Generating: ${queueLength} remaining`;
+                        } else {
+                            mobileQueueStatus.style.color = '#666';
+                            mobileQueueStatus.textContent = 'Queue: idle';
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to fetch queue status:', err);
+            }
         }
 
         async function loadFrequency() {
@@ -625,10 +1388,34 @@
                 if (config.poll_interval) {
                     document.getElementById('poll-interval').value = config.poll_interval;
                 }
+                if (config.frame_reload_minutes !== undefined) {
+                    document.getElementById('frame-reload').value = config.frame_reload_minutes;
+                }
                 frequencyLoaded = true;
                 pollIntervalLoaded = true;
             } catch (err) {
                 console.warn('Failed to load frequency:', err);
+            }
+        }
+
+        async function updateFrameReload() {
+            const frame_reload_minutes = parseInt(document.getElementById('frame-reload').value);
+            try {
+                const response = await fetch('/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ frame_reload_minutes })
+                });
+                if (response.ok) {
+                    showSaveIndicator();
+                    // Reload screens to apply new setting
+                    reloadScreens();
+                }
+            } catch (err) {
+                console.error('Failed to update frame reload:', err);
             }
         }
 
@@ -638,6 +1425,11 @@
                 const data = await response.json();
                 const playlistSelect = document.getElementById('playlist');
                 playlistSelect.innerHTML = '';
+
+                // Store available playlists globally
+                availablePlaylists = data.playlists || [];
+                currentPlaylistName = data.current || '';
+
                 data.playlists.forEach(function(name) {
                     const option = document.createElement('option');
                     option.value = name;
@@ -680,6 +1472,7 @@
                     body: JSON.stringify({ name: playlist })
                 });
                 if (response.ok) {
+                    currentPlaylistName = playlist;  // Update current playlist name
                     showSaveIndicator();
                     // Reload the screens to show the new playlist
                     reloadScreens();
@@ -715,6 +1508,9 @@
 
                         if (currentAssetGroup) {
                             // currentAssetGroup is already the complete asset group ID
+                            // There's an active override - display is locked
+                            isLocked = true;
+                            manualOverrideActive = true;
                             // Find its index in the playlist
                             const index = currentPlaylistAssetGroups.indexOf(currentAssetGroup);
                             if (index >= 0) {
@@ -722,28 +1518,32 @@
                                 console.log('[loadPlaylistAssetGroups] Found current asset group at index:', currentAssetGroupIndex);
                                 updateAssetGroupDisplay(currentPlaylistAssetGroups[currentAssetGroupIndex]);
                             } else {
-                                // Not in this playlist, start at beginning
-                                currentAssetGroupIndex = 0;
+                                // Not in this playlist, use time-based index (same as frames)
+                                currentAssetGroupIndex = getTimeBasedIndex(currentPlaylistAssetGroups.length);
                                 if (currentPlaylistAssetGroups.length > 0) {
-                                    updateAssetGroupDisplay(currentPlaylistAssetGroups[0]);
+                                    updateAssetGroupDisplay(currentPlaylistAssetGroups[currentAssetGroupIndex]);
                                 } else {
                                     updateAssetGroupDisplay('');
                                 }
                             }
+                            updateLockUI();
                         } else {
-                            // No current asset group, start at beginning
-                            currentAssetGroupIndex = 0;
+                            // No current asset group override, use time-based index (same as frames)
+                            isLocked = false;
+                            manualOverrideActive = false;
+                            currentAssetGroupIndex = getTimeBasedIndex(currentPlaylistAssetGroups.length);
                             if (currentPlaylistAssetGroups.length > 0) {
-                                updateAssetGroupDisplay(currentPlaylistAssetGroups[0]);
+                                updateAssetGroupDisplay(currentPlaylistAssetGroups[currentAssetGroupIndex]);
                             } else {
                                 updateAssetGroupDisplay('');
                             }
+                            updateLockUI();
                         }
                     } else {
-                        // Failed to load state, start at beginning
-                        currentAssetGroupIndex = 0;
+                        // Failed to load state, use time-based index (same as frames)
+                        currentAssetGroupIndex = getTimeBasedIndex(currentPlaylistAssetGroups.length);
                         if (currentPlaylistAssetGroups.length > 0) {
-                            updateAssetGroupDisplay(currentPlaylistAssetGroups[0]);
+                            updateAssetGroupDisplay(currentPlaylistAssetGroups[currentAssetGroupIndex]);
                         } else {
                             updateAssetGroupDisplay('');
                         }
@@ -882,7 +1682,7 @@
                         setTimeout(preloadNextBatch, 50);
                     }
                 };
-                img.src = url + '?preload=' + Date.now();
+                img.src = url;  // UUID-based URLs are cache-safe
             }
         }
 
@@ -891,6 +1691,7 @@
         document.getElementById('gap').addEventListener('change', updateScreenSizes);
         document.getElementById('frequency').addEventListener('change', updateFrequency);
         document.getElementById('poll-interval').addEventListener('change', updatePollInterval);
+        document.getElementById('frame-reload').addEventListener('change', updateFrameReload);
         document.getElementById('playlist').addEventListener('change', updatePlaylist);
 
         // Initialize
@@ -899,7 +1700,11 @@
         loadFrequency();
         loadPlaylists();
         updateTime();
-        setInterval(updateTime, 1000);
+        updateQueueStatus();
+        setInterval(function() {
+            updateTime();
+            updateQueueStatus();
+        }, 1000);
         updateScreenUrls();
 
         // Start preloading images after a short delay
@@ -909,6 +1714,413 @@
         document.getElementById('playlist').addEventListener('change', () => {
             setTimeout(preloadPlaylistImages, 1000);
         });
+
+        // Refresh playlist selector every 30 seconds (to catch new playlists)
+        setInterval(async () => {
+            try {
+                const currentSelection = document.getElementById('playlist').value;
+                const response = await fetch('/playlists', { credentials: 'same-origin' });
+                const data = await response.json();
+                const playlistSelect = document.getElementById('playlist');
+
+                // Only update if the list of playlists changed
+                const currentOptions = Array.from(playlistSelect.options).map(o => o.value);
+                if (JSON.stringify(currentOptions) !== JSON.stringify(data.playlists)) {
+                    playlistSelect.innerHTML = '';
+                    data.playlists.forEach(function(name) {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name;
+                        // Keep current selection if it still exists
+                        if (name === currentSelection) {
+                            option.selected = true;
+                        }
+                        playlistSelect.appendChild(option);
+                    });
+                }
+            } catch (err) {
+                console.warn('Failed to refresh playlists:', err);
+            }
+        }, 30000);
+
+        // ==================== Mobile View Functions ====================
+
+        let isMobileView = window.innerWidth <= 768;
+        let currentPreviewUrls = { left: '', center: '', right: '' };
+
+        function toggleViewMode() {
+            const mobileView = document.getElementById('mobile-view');
+            const desktopView = document.getElementById('desktop-view');
+            const toggleBtn = document.getElementById('view-toggle');
+
+            if (mobileView.classList.contains('hidden') || desktopView.classList.contains('force-show')) {
+                // Switch to mobile
+                mobileView.classList.remove('hidden');
+                desktopView.classList.remove('force-show');
+                desktopView.classList.add('hidden');
+                toggleBtn.textContent = 'Desktop View';
+                updateMobileUI();
+            } else {
+                // Switch to desktop
+                mobileView.classList.add('hidden');
+                desktopView.classList.remove('hidden');
+                desktopView.classList.add('force-show');
+                toggleBtn.textContent = 'Mobile View';
+            }
+        }
+
+        function updateMobileUI() {
+            // Update mobile playlist selector
+            const mobilePlaylist = document.getElementById('mobile-playlist');
+            const desktopPlaylist = document.getElementById('playlist');
+            if (mobilePlaylist && desktopPlaylist) {
+                mobilePlaylist.innerHTML = desktopPlaylist.innerHTML;
+                mobilePlaylist.value = desktopPlaylist.value;
+            }
+
+            // Update mobile asset name and position
+            updateMobileAssetDisplay();
+
+            // Update mobile lock button
+            updateMobileLockUI();
+
+            // Update mobile time
+            updateMobileTime();
+
+            // Update preview images
+            updateMobilePreview();
+        }
+
+        function updateMobileAssetDisplay() {
+            const mobileSearch = document.getElementById('mobile-asset-search');
+            const mobilePosition = document.getElementById('mobile-position');
+
+            if (mobileSearch) {
+                mobileSearch.value = currentAssetGroupName || '';
+                mobileSearch.placeholder = currentAssetGroupName || 'Search or tap to select...';
+            }
+            if (mobilePosition && currentPlaylistAssetGroups.length > 0) {
+                mobilePosition.textContent = `${currentAssetGroupIndex + 1} / ${currentPlaylistAssetGroups.length}`;
+            } else if (mobilePosition) {
+                mobilePosition.textContent = '-- / --';
+            }
+        }
+
+        function renderMobileAssetDropdown(filter = '') {
+            const dropdown = document.getElementById('mobile-asset-dropdown');
+            if (!dropdown) return;
+
+            const filterLower = filter.toLowerCase();
+            let html = '';
+
+            currentPlaylistAssetGroups.forEach((asset, index) => {
+                if (filter && !asset.toLowerCase().includes(filterLower)) return;
+
+                const isCurrent = index === currentAssetGroupIndex;
+                const currentClass = isCurrent ? 'current' : '';
+                html += `<div class="mobile-asset-option ${currentClass}" data-index="${index}">
+                    <span class="option-index">${index + 1}.</span>${asset}
+                </div>`;
+            });
+
+            if (html === '') {
+                html = '<div class="mobile-asset-option" style="color: #666;">No matches found</div>';
+            }
+
+            dropdown.innerHTML = html;
+
+            // Add click handlers
+            dropdown.querySelectorAll('.mobile-asset-option[data-index]').forEach(option => {
+                option.addEventListener('click', function() {
+                    const index = parseInt(this.getAttribute('data-index'));
+                    selectMobileAsset(index);
+                });
+            });
+        }
+
+        function selectMobileAsset(index) {
+            if (index < 0 || index >= currentPlaylistAssetGroups.length) return;
+
+            manualOverrideActive = true;
+            currentAssetGroupIndex = index;
+            const assetGroupName = currentPlaylistAssetGroups[index];
+
+            updateAssetGroupDisplay(assetGroupName);
+            closeMobileAssetDropdown();
+
+            // Only update server if locked
+            if (isLocked) {
+                fetch('/state/current-asset-group', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ asset_group: assetGroupName })
+                }).catch(err => console.error('Failed to update server state:', err));
+            }
+        }
+
+        function openMobileAssetDropdown() {
+            const dropdown = document.getElementById('mobile-asset-dropdown');
+            const search = document.getElementById('mobile-asset-search');
+            if (dropdown) {
+                renderMobileAssetDropdown(search ? search.value : '');
+                dropdown.classList.add('active');
+            }
+        }
+
+        function closeMobileAssetDropdown() {
+            const dropdown = document.getElementById('mobile-asset-dropdown');
+            const search = document.getElementById('mobile-asset-search');
+            if (dropdown) {
+                dropdown.classList.remove('active');
+            }
+            // Reset search to current asset name
+            if (search) {
+                search.value = currentAssetGroupName || '';
+            }
+        }
+
+        // Mobile asset search event handlers
+        document.getElementById('mobile-asset-search').addEventListener('focus', function() {
+            this.select();
+            openMobileAssetDropdown();
+        });
+
+        document.getElementById('mobile-asset-search').addEventListener('input', function() {
+            renderMobileAssetDropdown(this.value);
+            const dropdown = document.getElementById('mobile-asset-dropdown');
+            if (dropdown && !dropdown.classList.contains('active')) {
+                dropdown.classList.add('active');
+            }
+        });
+
+        document.getElementById('mobile-asset-search').addEventListener('blur', function() {
+            // Delay to allow click on dropdown option
+            setTimeout(closeMobileAssetDropdown, 200);
+        });
+
+        // Handle Enter key to select first match
+        document.getElementById('mobile-asset-search').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const dropdown = document.getElementById('mobile-asset-dropdown');
+                const firstOption = dropdown.querySelector('.mobile-asset-option[data-index]');
+                if (firstOption) {
+                    const index = parseInt(firstOption.getAttribute('data-index'));
+                    selectMobileAsset(index);
+                }
+                this.blur();
+            } else if (e.key === 'Escape') {
+                closeMobileAssetDropdown();
+                this.blur();
+            }
+        });
+
+        function updateMobileLockUI() {
+            const mobileBtn = document.getElementById('mobile-lock-btn');
+            const mobileIcon = document.getElementById('mobile-lock-icon');
+            const mobileText = document.getElementById('mobile-lock-text');
+
+            if (mobileBtn && mobileIcon && mobileText) {
+                if (isLocked) {
+                    mobileBtn.classList.add('locked');
+                    mobileIcon.innerHTML = '&#128274;';
+                    mobileText.textContent = 'Locked - Staying on this image';
+                } else {
+                    mobileBtn.classList.remove('locked');
+                    mobileIcon.innerHTML = '&#128275;';
+                    mobileText.textContent = 'Unlocked - Auto Cycling';
+                }
+            }
+        }
+
+        // New Asset Modal Functions
+        function openNewAssetModal() {
+            const modal = document.getElementById('new-asset-modal');
+            const playlistSelect = document.getElementById('new-asset-playlist');
+            const promptInput = document.getElementById('new-asset-prompt');
+            const statusDiv = document.getElementById('create-status');
+
+            // Reset form
+            promptInput.value = '';
+            statusDiv.className = 'create-status';
+            statusDiv.textContent = '';
+            document.getElementById('btn-create-asset').disabled = false;
+
+            // Populate playlist dropdown with current playlists
+            playlistSelect.innerHTML = '<option value="">-- Select Playlist --</option>';
+            availablePlaylists.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p;
+                option.textContent = p;
+                // Pre-select current playlist
+                if (p === currentPlaylistName) {
+                    option.selected = true;
+                }
+                playlistSelect.appendChild(option);
+            });
+
+            modal.classList.add('active');
+        }
+
+        function closeNewAssetModal() {
+            const modal = document.getElementById('new-asset-modal');
+            modal.classList.remove('active');
+        }
+
+        async function createAssetFromPrompt() {
+            const prompt = document.getElementById('new-asset-prompt').value.trim();
+            const playlist = document.getElementById('new-asset-playlist').value;
+            const statusDiv = document.getElementById('create-status');
+            const createBtn = document.getElementById('btn-create-asset');
+
+            if (!prompt) {
+                statusDiv.className = 'create-status error';
+                statusDiv.textContent = 'Please enter a theme or concept';
+                return;
+            }
+
+            // Show loading state
+            statusDiv.className = 'create-status loading';
+            statusDiv.textContent = 'Generating prompts with Gemini...';
+            createBtn.disabled = true;
+
+            try {
+                const response = await fetch('/asset-group/create-from-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ prompt, playlist })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'ok') {
+                    statusDiv.className = 'create-status success';
+                    statusDiv.innerHTML = `Created: <strong>${data.asset_group_id}</strong><br>` +
+                        `Left: ${data.prompts.left}<br>` +
+                        `Center: ${data.prompts.center}<br>` +
+                        `Right: ${data.prompts.right}<br>` +
+                        `<small>Images queued for generation...</small>`;
+
+                    // Refresh the playlist to include the new asset
+                    if (playlist) {
+                        await loadPlaylistAssetGroups();
+                    }
+
+                    // Close modal after a brief delay to show success
+                    setTimeout(() => {
+                        closeNewAssetModal();
+                        // Navigate to the new asset if it's in current playlist
+                        if (playlist === currentPlaylistName) {
+                            const newIndex = currentPlaylistAssetGroups.indexOf(data.asset_group_id);
+                            if (newIndex >= 0) {
+                                selectMobileAsset(newIndex);
+                            }
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || 'Failed to create asset group');
+                }
+            } catch (error) {
+                console.error('Error creating asset group:', error);
+                statusDiv.className = 'create-status error';
+                statusDiv.textContent = `Error: ${error.message}`;
+                createBtn.disabled = false;
+            }
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('new-asset-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeNewAssetModal();
+            }
+        });
+
+        function updateMobileTime() {
+            const mobileTime = document.getElementById('mobile-time');
+            if (mobileTime) {
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                mobileTime.textContent = `${hours}:${minutes}:${seconds}`;
+            }
+        }
+
+        async function updateMobilePreview() {
+            if (!currentAssetGroupName) return;
+
+            try {
+                const response = await fetch(`/asset-group/${encodeURIComponent(currentAssetGroupName)}`, {
+                    credentials: 'same-origin'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Update preview images using thumbnail URLs
+                    const leftImg = document.getElementById('mobile-preview-left');
+                    const centerImg = document.getElementById('mobile-preview-center');
+                    const rightImg = document.getElementById('mobile-preview-right');
+
+                    if (leftImg && data.left && data.left.image_url) {
+                        const thumbUrl = data.left.image_url.replace('.png', '_thumb.png');
+                        if (thumbUrl !== currentPreviewUrls.left) {
+                            leftImg.src = thumbUrl;
+                            currentPreviewUrls.left = thumbUrl;
+                        }
+                    }
+                    if (centerImg && data.center && data.center.image_url) {
+                        const thumbUrl = data.center.image_url.replace('.png', '_thumb.png');
+                        if (thumbUrl !== currentPreviewUrls.center) {
+                            centerImg.src = thumbUrl;
+                            currentPreviewUrls.center = thumbUrl;
+                        }
+                    }
+                    if (rightImg && data.right && data.right.image_url) {
+                        const thumbUrl = data.right.image_url.replace('.png', '_thumb.png');
+                        if (thumbUrl !== currentPreviewUrls.right) {
+                            rightImg.src = thumbUrl;
+                            currentPreviewUrls.right = thumbUrl;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load preview:', err);
+            }
+        }
+
+        // Mobile playlist change handler
+        document.getElementById('mobile-playlist').addEventListener('change', function() {
+            document.getElementById('playlist').value = this.value;
+            updatePlaylist();
+        });
+
+        // Keep mobile UI in sync
+        const originalUpdateAssetGroupDisplay = updateAssetGroupDisplay;
+        updateAssetGroupDisplay = function(assetGroupName) {
+            originalUpdateAssetGroupDisplay(assetGroupName);
+            updateMobileAssetDisplay();
+            updateMobilePreview();
+        };
+
+        const originalUpdateLockUI = updateLockUI;
+        updateLockUI = function() {
+            originalUpdateLockUI();
+            updateMobileLockUI();
+        };
+
+        // Update mobile time every second
+        setInterval(updateMobileTime, 1000);
+
+        // Sync mobile playlist when desktop changes
+        document.getElementById('playlist').addEventListener('change', function() {
+            document.getElementById('mobile-playlist').value = this.value;
+        });
+
+        // Initialize mobile view on load
+        setTimeout(function() {
+            updateMobileUI();
+        }, 1000);
 
     </script>
 </body>

@@ -55,26 +55,22 @@ def test_server(request):
     test_db = Path.home() / ".triptic" / "triptic_test.db"
     env = os.environ.copy()
     env['TRIPTIC_DB_PATH'] = str(test_db)
+    # Remove auth vars so server runs without authentication
+    env.pop('TRIPTIC_AUTH_USERNAME', None)
+    env.pop('TRIPTIC_AUTH_PASSWORD', None)
 
     try:
+        # For daemon mode, don't pipe stdout/stderr as it can cause blocking
+        # when the parent process exits and child takes over
         process = subprocess.Popen(
             ["uv", "run", "triptic", "start", "--port", str(test_port), "--daemon"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             env=env
         )
 
-        # Wait a moment for process to start
-        time.sleep(1)
-
-        # Check if process is still running
-        poll_result = process.poll()
-        if poll_result is not None:
-            stdout, stderr = process.communicate()
-            raise RuntimeError(
-                f"Test server process exited with code {poll_result}\n"
-                f"stdout: {stdout.decode()}\nstderr: {stderr.decode()}"
-            )
+        # Wait a moment for daemon to spawn
+        time.sleep(2)
 
         # Wait for server to start accepting connections
         max_wait = 10  # seconds

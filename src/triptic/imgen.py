@@ -513,7 +513,7 @@ def save_prompt_file(prompt: str, output_paths: dict[str, Path], screen_prompts:
         f.write(f"  Right: {screen_prompts['right']}\n")
 
 
-def generate_svg_triplet(name: str, prompt: str, output_paths: dict[str, Path]) -> dict[str, Path]:
+def generate_image_triplet(name: str, prompt: str, output_paths: dict[str, Path]) -> dict[str, Path]:
     """
     Generate a triplet of images based on a prompt using Gemini.
 

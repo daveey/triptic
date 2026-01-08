@@ -577,3 +577,145 @@ def update_screen_heartbeat_db(screen_id: str, timestamp: str) -> None:
             "INSERT OR REPLACE INTO screen_heartbeats (screen_id, last_sync) VALUES (?, ?)",
             (screen_id, timestamp)
         )
+
+
+# Generation Queue Operations
+def init_generation_queue_table() -> None:
+    """Initialize the generation queue table."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS generation_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                asset_group_name TEXT NOT NULL,
+                screen TEXT NOT NULL CHECK(screen IN ('left', 'center', 'right')),
+                prompt TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'canceled', 'failed')),
+                content_uuid TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                completed_at TEXT,
+                error_message TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_generation_queue_status
+            ON generation_queue (status)
+        """)
+
+
+def add_to_generation_queue(uuid: str, asset_group_name: str, screen: str, prompt: str, content_uuid: str) -> int:
+    """Add a generation request to the queue."""
+    from datetime import datetime
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO generation_queue (uuid, asset_group_name, screen, prompt, content_uuid, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (uuid, asset_group_name, screen, prompt, content_uuid, datetime.now().isoformat()))
+        return cursor.lastrowid
+
+
+def get_pending_generation() -> Optional[dict]:
+    """Get the next pending generation request."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, uuid, asset_group_name, screen, prompt, content_uuid, created_at
+            FROM generation_queue
+            WHERE status = 'pending'
+            ORDER BY created_at ASC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            return {
+                'id': row[0],
+                'uuid': row[1],
+                'asset_group_name': row[2],
+                'screen': row[3],
+                'prompt': row[4],
+                'content_uuid': row[5],
+                'created_at': row[6]
+            }
+        return None
+
+
+def update_generation_status(uuid: str, status: str, error_message: str = None) -> bool:
+    """Update the status of a generation request."""
+    from datetime import datetime
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if status in ('completed', 'canceled', 'failed'):
+            cursor.execute("""
+                UPDATE generation_queue
+                SET status = ?, completed_at = ?, error_message = ?
+                WHERE uuid = ?
+            """, (status, datetime.now().isoformat(), error_message, uuid))
+        else:
+            cursor.execute("""
+                UPDATE generation_queue SET status = ? WHERE uuid = ?
+            """, (status, uuid))
+        return cursor.rowcount > 0
+
+
+def get_generation_queue() -> list:
+    """Get all generation queue items."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT uuid, asset_group_name, screen, prompt, status, content_uuid, created_at, completed_at, error_message
+            FROM generation_queue
+            ORDER BY created_at DESC
+            LIMIT 100
+        """)
+        return [
+            {
+                'uuid': row[0],
+                'asset_group_name': row[1],
+                'screen': row[2],
+                'prompt': row[3],
+                'status': row[4],
+                'content_uuid': row[5],
+                'created_at': row[6],
+                'completed_at': row[7],
+                'error_message': row[8]
+            }
+            for row in cursor.fetchall()
+        ]
+
+
+def cancel_generations(uuids: list) -> int:
+    """Cancel multiple generation requests."""
+    from datetime import datetime
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        canceled_count = 0
+        for uuid in uuids:
+            # Only cancel pending requests
+            cursor.execute("""
+                UPDATE generation_queue
+                SET status = 'canceled', completed_at = ?
+                WHERE uuid = ? AND status = 'pending'
+            """, (datetime.now().isoformat(), uuid))
+            canceled_count += cursor.rowcount
+        return canceled_count
+
+
+def clear_completed_generations(older_than_hours: int = 24) -> int:
+    """Clear old completed/canceled/failed generations."""
+    from datetime import datetime, timedelta
+
+    cutoff = (datetime.now() - timedelta(hours=older_than_hours)).isoformat()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM generation_queue
+            WHERE status IN ('completed', 'canceled', 'failed')
+            AND completed_at < ?
+        """, (cutoff,))
+        return cursor.rowcount

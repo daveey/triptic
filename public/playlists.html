@@ -441,6 +441,8 @@
     <script>
         let currentPlaylist = '';
         let allPlaylists = {};
+        let playlistCounts = {};  // Store item counts for each playlist
+        let loadedPlaylists = {};  // Track which playlists have been loaded
         let allAssetGroups = [];
         let draggedElement = null;
         let draggedPlaylist = null;
@@ -448,10 +450,22 @@
 
         async function loadAllPlaylists() {
             try {
+                // Reset state for fresh load
+                allPlaylists = {};
+                loadedPlaylists = {};
+                playlistCounts = {};
+
                 // Get list of playlists and current playlist
                 const playlistsResponse = await fetch('/playlists', { credentials: 'same-origin' });
                 const playlistsData = await playlistsResponse.json();
                 currentPlaylist = playlistsData.current;
+
+                // Extract item counts from playlist data
+                if (playlistsData.data) {
+                    for (const [name, data] of Object.entries(playlistsData.data)) {
+                        playlistCounts[name] = data.assets ? data.assets.length : 0;
+                    }
+                }
 
                 // Load all asset groups for typeahead
                 const assetGroupsResponse = await fetch('/asset-groups', { credentials: 'same-origin' });
@@ -461,14 +475,13 @@
                 allAssetGroups = Object.keys(assetGroupsData.asset_groups || {});
                 console.log('[loadAllPlaylists] Loaded', allAssetGroups.length, 'asset groups');
 
-                // Load each playlist's items
-                const promises = playlistsData.playlists.map(async (name) => {
-                    const response = await fetch('/playlists/' + name, { credentials: 'same-origin' });
+                // Only load the active playlist's items initially
+                if (currentPlaylist) {
+                    const response = await fetch('/playlists/' + encodeURIComponent(currentPlaylist), { credentials: 'same-origin' });
                     const data = await response.json();
-                    allPlaylists[name] = data.items;
-                });
-
-                await Promise.all(promises);
+                    allPlaylists[currentPlaylist] = data.items;
+                    loadedPlaylists[currentPlaylist] = true;
+                }
 
                 // Sort playlists alphabetically
                 const sortedPlaylists = playlistsData.playlists.sort((a, b) => a.localeCompare(b));
@@ -489,6 +502,7 @@
                 const playlist = document.createElement('div');
                 playlist.className = 'playlist' + (name === current ? ' active' : '');
                 playlist.id = 'playlist-' + name;
+                const isExpanded = name === current;  // Only active playlist is expanded by default
 
                 const header = document.createElement('div');
                 header.className = 'playlist-header';
@@ -498,9 +512,22 @@
                 titleContainer.style.alignItems = 'center';
                 titleContainer.style.gap = '10px';
 
+                // Expand/collapse chevron
+                const chevron = document.createElement('span');
+                chevron.className = 'expand-chevron';
+                chevron.id = 'chevron-' + name;
+                chevron.textContent = isExpanded ? '▼' : '▶';
+                chevron.style.cursor = 'pointer';
+                chevron.style.marginRight = '8px';
+                chevron.style.fontSize = '12px';
+                chevron.style.color = '#888';
+                chevron.onclick = () => togglePlaylist(name);
+                titleContainer.appendChild(chevron);
+
                 const title = document.createElement('div');
                 title.className = 'playlist-title';
-                title.textContent = name;
+                const count = playlistCounts[name] || 0;
+                title.textContent = name + ' (' + count + ')';
                 title.style.cursor = 'pointer';
                 title.onclick = () => togglePlaylist(name);
                 titleContainer.appendChild(title);
@@ -552,16 +579,19 @@
                 header.appendChild(actions);
                 playlist.appendChild(header);
 
-                // Create triplets container
+                // Create triplets container - only expand active playlist
                 const triplets = document.createElement('div');
-                triplets.className = 'triplets expanded';
+                triplets.className = 'triplets' + (isExpanded ? ' expanded' : '');
                 triplets.id = 'triplets-' + name;
 
-                if (playlistData[name]) {
+                if (isExpanded && playlistData[name]) {
                     playlistData[name].forEach(function(item, index) {
                         const triplet = createTriplet(index + 1, item, name);
                         triplets.appendChild(triplet);
                     });
+                } else if (!isExpanded) {
+                    // Show placeholder for collapsed playlists
+                    triplets.innerHTML = '<div class="loading" style="padding: 10px;">Click to expand...</div>';
                 }
 
                 playlist.appendChild(triplets);
@@ -578,7 +608,42 @@
 
         async function togglePlaylist(name) {
             const triplets = document.getElementById('triplets-' + name);
-            triplets.classList.toggle('expanded');
+            const chevron = document.getElementById('chevron-' + name);
+            const isExpanding = !triplets.classList.contains('expanded');
+
+            if (isExpanding && !loadedPlaylists[name]) {
+                // Load playlist items on first expand
+                triplets.innerHTML = '<div class="loading" style="padding: 10px;">Loading...</div>';
+                triplets.classList.add('expanded');
+                if (chevron) chevron.textContent = '▼';
+
+                try {
+                    const response = await fetch('/playlists/' + encodeURIComponent(name), { credentials: 'same-origin' });
+                    const data = await response.json();
+                    allPlaylists[name] = data.items;
+                    loadedPlaylists[name] = true;
+
+                    // Render the items
+                    triplets.innerHTML = '';
+                    if (data.items && data.items.length > 0) {
+                        data.items.forEach(function(item, index) {
+                            const triplet = createTriplet(index + 1, item, name);
+                            triplets.appendChild(triplet);
+                        });
+                    } else {
+                        triplets.innerHTML = '<div class="loading" style="padding: 10px; color: #666;">Empty playlist</div>';
+                    }
+                } catch (err) {
+                    console.error('Failed to load playlist:', err);
+                    triplets.innerHTML = '<div class="loading" style="padding: 10px; color: #e74c3c;">Failed to load</div>';
+                }
+            } else {
+                triplets.classList.toggle('expanded');
+                // Update chevron
+                if (chevron) {
+                    chevron.textContent = triplets.classList.contains('expanded') ? '▼' : '▶';
+                }
+            }
         }
 
         function createTriplet(number, item, playlistName) {

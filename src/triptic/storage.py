@@ -17,6 +17,8 @@ THUMBNAIL_HEIGHT = 480
 DEFAULT_LEFT_UUID = "00000000-0000-0000-0000-000000000001"
 DEFAULT_CENTER_UUID = "00000000-0000-0000-0000-000000000002"
 DEFAULT_RIGHT_UUID = "00000000-0000-0000-0000-000000000003"
+GENERATING_PLACEHOLDER_UUID = "00000000-0000-0000-0000-000000000010"
+CANCELED_PLACEHOLDER_UUID = "00000000-0000-0000-0000-000000000011"
 
 
 def get_assets_dir() -> Path:
@@ -62,6 +64,8 @@ def initialize_default_assets() -> None:
         'default_left.png': DEFAULT_LEFT_UUID,
         'default_center.png': DEFAULT_CENTER_UUID,
         'default_right.png': DEFAULT_RIGHT_UUID,
+        'generating.png': GENERATING_PLACEHOLDER_UUID,
+        'canceled.png': CANCELED_PLACEHOLDER_UUID,
     }
 
     for filename, content_uuid in defaults.items():
@@ -129,7 +133,7 @@ def get_file_path(content_uuid: str, extension: str = None) -> Optional[Path]:
         return None
 
     # Try common extensions
-    extensions = ['.png', '.jpg', '.jpeg', '.svg', '.gif', '.mp4', '.webm']
+    extensions = ['.png', '.jpg', '.jpeg', '.gif', '.mp4', '.webm']
     for ext in extensions:
         file_path = assets_dir / f"{content_uuid}{ext}"
         if file_path.exists():

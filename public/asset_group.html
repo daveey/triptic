@@ -1277,17 +1277,8 @@
                     const response = await fetch(`/playlists/${encodeURIComponent(playlistName)}`, { credentials: 'same-origin' });
                     const data = await response.json();
                     if (data.items && data.items.length > 0) {
-                        // Check if any item matches this asset group
-                        const hasAssetGroup = data.items.some(item => {
-                            // Extract asset group name from path
-                            if (item.left) {
-                                const match = item.left.match(/img\/(.+)\.(left|center|right)\./);
-                                if (match && match[1] === assetGroupName) {
-                                    return true;
-                                }
-                            }
-                            return false;
-                        });
+                        // Check if any item matches this asset group by name
+                        const hasAssetGroup = data.items.some(item => item.name === assetGroupName);
                         if (hasAssetGroup) {
                             playlistsWithAssetGroup.add(playlistName);
                         }
