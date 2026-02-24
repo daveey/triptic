@@ -272,7 +272,7 @@ Be specific and detailed. This analysis will be used to generate a matching thir
 
     # Call vision model to analyze images
     vision_response = client.models.generate_content(
-        model='gemini-2.0-flash-exp',
+        model='gemini-2.0-flash',
         contents=[analysis_prompt] + context_parts
     )
 
@@ -411,7 +411,7 @@ Be specific and detailed. This analysis will be used to generate a modified vers
 
     # Call vision model to analyze the image
     vision_response = client.models.generate_content(
-        model='gemini-2.0-flash-exp',
+        model='gemini-2.0-flash',
         contents=[analysis_prompt, image_part]
     )
 

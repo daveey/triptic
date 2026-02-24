@@ -523,6 +523,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_rename_asset_group()
         elif self.path.startswith('/asset-group/') and '/duplicate' in self.path:
             self._handle_duplicate_asset_group()
+        elif self.path.startswith('/asset-group/') and '/upload-video/' in self.path:
+            self._handle_upload_video()
         elif self.path.startswith('/asset-group/') and '/upload/' in self.path:
             self._handle_upload_image()
         elif self.path.startswith('/asset-group/') and '/upload-from-url/' in self.path:
@@ -817,9 +819,12 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                                 if content_uuid and not content_uuid.startswith('img/'):
                                     item[screen] = f"/content/assets/{content_uuid}.png"
                                     item[f"{screen}_thumb"] = f"/content/assets/{content_uuid}_thumb.png"
+                                    # Add video URL if available
+                                    if screen_asset.video_url:
+                                        item[f"{screen}_video"] = screen_asset.video_url
                                 else:
-                                    item[screen] = f"/img/{screen}/{locked_asset_group}.png"
-                                    item[f"{screen}_thumb"] = f"/img/{screen}/{locked_asset_group}.png"
+                                    item[screen] = "/defaults/generating.png"
+                                    item[f"{screen}_thumb"] = "/defaults/generating.png"
                     items = [item]
                 else:
                     # Locked asset group not found, fall back to playlist
@@ -1079,7 +1084,7 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
 3. [prompt for right]"""
 
                 response = client.models.generate_content(
-                    model='gemini-2.0-flash-exp',
+                    model='gemini-2.0-flash',
                     contents=generation_prompt
                 )
 
@@ -1545,13 +1550,17 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
             body = self.rfile.read(content_length)
             data = json.loads(body.decode())
 
+            # Get User-Agent for debugging
+            user_agent = self.headers.get('User-Agent', 'unknown')
+
             # Add timestamp and store
             log_entry = {
                 'timestamp': datetime.now().isoformat(),
                 'screen': data.get('screen', 'unknown'),
                 'level': data.get('level', 'log'),
                 'message': data.get('message', ''),
-                'data': data.get('data')
+                'data': data.get('data'),
+                'user_agent': user_agent
             }
 
             _frame_logs.append(log_entry)
@@ -1561,7 +1570,11 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
                 _frame_logs = _frame_logs[-_frame_logs_max:]
 
             # Also log to server log for immediate visibility
-            log_msg = f"[Frame:{log_entry['screen']}] [{log_entry['level']}] {log_entry['message']}"
+            # Include User-Agent for VIDEO logs to help debug playback issues
+            if 'VIDEO' in log_entry['message']:
+                log_msg = f"[Frame:{log_entry['screen']}] [{log_entry['level']}] {log_entry['message']} [UA: {user_agent}]"
+            else:
+                log_msg = f"[Frame:{log_entry['screen']}] [{log_entry['level']}] {log_entry['message']}"
             if log_entry['level'] == 'error':
                 logging.error(log_msg)
             elif log_entry['level'] == 'warn':
@@ -2105,6 +2118,112 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
             import traceback
             traceback.print_exc()
             self.send_error(500, f"Error uploading image: {e}")
+
+    def _handle_upload_video(self) -> None:
+        """Upload a video for a screen, creating a new version."""
+        try:
+            from urllib.parse import unquote
+            import uuid
+            from . import storage
+
+            # Parse path: /asset-group/{name}/upload-video/{screen}
+            path_parts = self.path.split('/')
+            asset_group_name = unquote(path_parts[2]) if len(path_parts) > 2 else None
+            screen = path_parts[4] if len(path_parts) > 4 else None
+
+            if not asset_group_name or not screen:
+                self.send_error(400, "Missing asset group name or screen")
+                return
+
+            if screen not in ['left', 'center', 'right']:
+                self.send_error(400, "Invalid screen name")
+                return
+
+            # Read the uploaded video data
+            content_length = int(self.headers.get('Content-Length', 0))
+            video_data = self.rfile.read(content_length)
+
+            if not video_data:
+                self.send_error(400, "No video data received")
+                return
+
+            # Get or create asset group from database
+            asset_group = get_asset_group(asset_group_name)
+            if not asset_group:
+                # Create new asset group if it doesn't exist
+                asset_group = AssetGroup(id=asset_group_name)
+
+            # Create a new UUID for the uploaded video
+            new_uuid = str(uuid.uuid4())
+            assets_dir = storage.get_assets_dir()
+            video_path = assets_dir / f"{new_uuid}.mp4"
+
+            # Save the uploaded video
+            video_path.write_bytes(video_data)
+
+            # Extract first frame as thumbnail/preview image
+            try:
+                import subprocess
+                png_path = assets_dir / f"{new_uuid}.png"
+                # Use ffmpeg to extract first frame
+                subprocess.run([
+                    'ffmpeg', '-i', str(video_path), '-vframes', '1',
+                    '-f', 'image2', str(png_path), '-y'
+                ], capture_output=True, check=True)
+                # Create thumbnail from the extracted frame
+                if png_path.exists():
+                    storage.create_thumbnail(new_uuid)
+            except Exception as thumb_err:
+                logging.warning(f"Could not create video thumbnail: {thumb_err}")
+
+            # Create GIF version for old browsers that can't play HTML5 video
+            try:
+                import subprocess
+                gif_path = assets_dir / f"{new_uuid}.gif"
+                logging.info(f"Creating GIF from video: {video_path} -> {gif_path}")
+                # Convert to optimized GIF (320px width, 30fps, 128 colors for smooth playback)
+                subprocess.run([
+                    'ffmpeg', '-i', str(video_path),
+                    '-vf', 'fps=30,scale=320:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer',
+                    str(gif_path), '-y'
+                ], capture_output=True, check=True)
+                logging.info(f"Created GIF: {gif_path} ({gif_path.stat().st_size} bytes)")
+            except Exception as gif_err:
+                logging.warning(f"Could not create GIF from video: {gif_err}")
+
+            # Create a new version for the screen
+            screen_asset = getattr(asset_group, screen)
+            new_version = AssetVersion(
+                version_uuid=new_uuid,
+                content=new_uuid,
+                prompt="Uploaded video",
+                timestamp=datetime.now().isoformat()
+            )
+            screen_asset.add_version(new_version, set_as_current=True)
+            # Set video_url on the screen asset
+            screen_asset.video_url = f'/content/assets/{new_uuid}.mp4'
+
+            # Save to database
+            save_asset_group(asset_group)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            response = json.dumps({
+                'status': 'ok',
+                'uploaded': screen,
+                'new_uuid': new_uuid,
+                'video_url': f'/content/assets/{new_uuid}.mp4',
+                'image_url': f'/content/assets/{new_uuid}.png'
+            })
+            self.wfile.write(response.encode())
+
+            logging.info(f"Uploaded video to {screen} for '{asset_group_name}', created version {new_uuid}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.send_error(500, f"Error uploading video: {e}")
 
     def _handle_upload_from_url(self) -> None:
         """Upload an image from a URL for a screen, creating a new version."""
@@ -3114,7 +3233,7 @@ Expand it into a detailed, descriptive prompt following these best practices:
 Generate a single, well-crafted prompt (2-4 sentences) that will produce stunning results with Imagen. Return ONLY the expanded prompt text, nothing else."""
 
                 response = client.models.generate_content(
-                    model='gemini-2.0-flash-exp',
+                    model='gemini-2.0-flash',
                     contents=expansion_prompt
                 )
 
@@ -3192,7 +3311,7 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
 3. [prompt for right]"""
 
                 response = client.models.generate_content(
-                    model='gemini-2.0-flash-exp',
+                    model='gemini-2.0-flash',
                     contents=generation_prompt
                 )
 
@@ -3295,7 +3414,7 @@ Generate a prompt for the {screen.upper()} panel that:
 Return ONLY the prompt text, nothing else. No numbering, no explanations."""
 
                 response = client.models.generate_content(
-                    model='gemini-2.0-flash-exp',
+                    model='gemini-2.0-flash',
                     contents=generation_prompt
                 )
 
@@ -3635,18 +3754,21 @@ def get_playlist_items(playlist_name: str = None) -> list:
                             item[screen] = f"/content/assets/{content_uuid}.png"
                             # Add thumbnail URL
                             item[f"{screen}_thumb"] = f"/content/assets/{content_uuid}_thumb.png"
+                            # Add video URL if available
+                            if screen_asset.video_url:
+                                item[f"{screen}_video"] = screen_asset.video_url
                         else:
-                            # Fallback
-                            item[screen] = f"/img/{screen}/{asset_group_name}.png"
-                            item[f"{screen}_thumb"] = f"/img/{screen}/{asset_group_name}.png"
+                            # Fallback - use generating placeholder
+                            item[screen] = "/defaults/generating.png"
+                            item[f"{screen}_thumb"] = "/defaults/generating.png"
                     else:
-                        # No current version - use placeholder
-                        item[screen] = f"/img/{screen}/{asset_group_name}.png"
-                        item[f"{screen}_thumb"] = f"/img/{screen}/{asset_group_name}.png"
+                        # No current version - use generating placeholder
+                        item[screen] = "/defaults/generating.png"
+                        item[f"{screen}_thumb"] = "/defaults/generating.png"
                 else:
-                    # No versions - use placeholder
-                    item[screen] = f"/img/{screen}/{asset_group_name}.png"
-                    item[f"{screen}_thumb"] = f"/img/{screen}/{asset_group_name}.png"
+                    # No versions - use generating placeholder
+                    item[screen] = "/defaults/generating.png"
+                    item[f"{screen}_thumb"] = "/defaults/generating.png"
 
             result.append(item)
         else:
