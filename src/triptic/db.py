@@ -126,8 +126,18 @@ def init_database() -> None:
         """)
 
         cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_asset_versions_asset_id_version
+            ON asset_versions (asset_id, version_index)
+        """)
+
+        cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_assets_group_id
             ON assets (asset_group_id)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_assets_group_screen
+            ON assets (asset_group_id, screen)
         """)
 
         cursor.execute("""
@@ -385,15 +395,163 @@ def get_asset_group_db(asset_group_id: str) -> Optional[dict]:
         return result
 
 
+def _build_asset_groups_from_rows(cursor, group_rows) -> dict:
+    """Build asset group dicts from pre-fetched group rows using batch queries.
+
+    Fetches all assets and versions in bulk instead of per-group queries.
+    """
+    from . import storage
+
+    if not group_rows:
+        return {}
+
+    group_db_ids = [row['id'] for row in group_rows]
+    group_id_map = {row['id']: row['group_id'] for row in group_rows}
+
+    # Batch fetch all assets for these groups
+    placeholders = ','.join('?' * len(group_db_ids))
+    cursor.execute(
+        f"SELECT id, asset_group_id, screen, current_version_uuid FROM assets WHERE asset_group_id IN ({placeholders})",
+        group_db_ids
+    )
+    asset_rows = cursor.fetchall()
+
+    # Map: asset_group_db_id -> {screen -> asset_row}
+    assets_by_group = {}
+    asset_db_ids = []
+    for row in asset_rows:
+        assets_by_group.setdefault(row['asset_group_id'], {})[row['screen']] = row
+        asset_db_ids.append(row['id'])
+
+    # Batch fetch all versions for these assets
+    versions_by_asset = {}
+    if asset_db_ids:
+        placeholders = ','.join('?' * len(asset_db_ids))
+        cursor.execute(
+            f"SELECT asset_id, content_uuid, prompt, version_uuid, timestamp FROM asset_versions WHERE asset_id IN ({placeholders}) ORDER BY version_index",
+            asset_db_ids
+        )
+        for row in cursor.fetchall():
+            versions_by_asset.setdefault(row['asset_id'], []).append({
+                'content': row['content_uuid'],
+                'prompt': row['prompt'],
+                'version_uuid': row['version_uuid'],
+                'timestamp': row['timestamp'],
+            })
+
+    # Build results
+    results = {}
+    for group_db_id, group_id in group_id_map.items():
+        result = {'id': group_id}
+        group_assets = assets_by_group.get(group_db_id, {})
+
+        for screen in ['left', 'center', 'right']:
+            asset_row = group_assets.get(screen)
+            if asset_row:
+                asset_db_id = asset_row['id']
+                current_version_uuid = asset_row['current_version_uuid']
+                versions = versions_by_asset.get(asset_db_id, [])
+
+                # Find current version's content_uuid
+                content_uuid = None
+                if current_version_uuid and versions:
+                    for v in versions:
+                        if v['version_uuid'] == current_version_uuid:
+                            content_uuid = v['content']
+                            break
+
+                if not content_uuid and versions:
+                    content_uuid = versions[0]['content']
+
+                # Build image URL for current version
+                local_path = None
+                image_url = ""
+                thumb_url = ""
+                video_url = None
+                if content_uuid and not content_uuid.startswith('img/'):
+                    file_path = storage.get_file_path(content_uuid)
+                    if file_path and file_path.exists():
+                        image_url = f"/content/assets/{content_uuid}.png"
+                        thumb_url = f"/content/assets/{content_uuid}_thumb.png"
+                        local_path = str(file_path)
+                        video_path = file_path.with_suffix('.mp4')
+                        if video_path.exists():
+                            video_url = f"/content/assets/{content_uuid}.mp4"
+                    else:
+                        default_uuids = {
+                            'left': storage.DEFAULT_LEFT_UUID,
+                            'center': storage.DEFAULT_CENTER_UUID,
+                            'right': storage.DEFAULT_RIGHT_UUID,
+                        }
+                        default_uuid = default_uuids.get(screen)
+                        if default_uuid:
+                            image_url = f"/content/assets/{default_uuid}.png"
+                            thumb_url = f"/content/assets/{default_uuid}_thumb.png"
+                            local_path = str(storage.get_assets_dir() / f"{default_uuid}.png")
+                else:
+                    image_url = f"/img/{screen}/{group_id}.png"
+                    thumb_url = f"/img/{screen}/{group_id}.png"
+
+                result[screen] = {
+                    'versions': versions,
+                    'current_version_uuid': current_version_uuid,
+                    'image_url': image_url,
+                    'thumb_url': thumb_url,
+                    'video_url': video_url,
+                    'local_path': local_path,
+                }
+            else:
+                default_uuids = {
+                    'left': storage.DEFAULT_LEFT_UUID,
+                    'center': storage.DEFAULT_CENTER_UUID,
+                    'right': storage.DEFAULT_RIGHT_UUID,
+                }
+                default_uuid = default_uuids.get(screen)
+                if default_uuid:
+                    image_url = f"/content/assets/{default_uuid}.png"
+                    thumb_url = f"/content/assets/{default_uuid}_thumb.png"
+                    local_path = str(storage.get_assets_dir() / f"{default_uuid}.png")
+                else:
+                    image_url = ''
+                    thumb_url = ''
+                    local_path = None
+
+                result[screen] = {
+                    'versions': [],
+                    'current_version_uuid': None,
+                    'image_url': image_url,
+                    'thumb_url': thumb_url,
+                    'local_path': local_path,
+                }
+
+        results[group_id] = result
+
+    return results
+
+
 def get_all_asset_groups_db() -> dict:
-    """Get all asset groups from the database."""
+    """Get all asset groups from the database using batch queries."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT id, group_id FROM asset_groups")
+        group_rows = cursor.fetchall()
+        return _build_asset_groups_from_rows(cursor, group_rows)
 
-        cursor.execute("SELECT group_id FROM asset_groups")
-        group_ids = [row[0] for row in cursor.fetchall()]
 
-        return {group_id: get_asset_group_db(group_id) for group_id in group_ids}
+def get_asset_groups_by_ids_db(group_ids: list[str]) -> dict:
+    """Get specific asset groups by their IDs using batch queries."""
+    if not group_ids:
+        return {}
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        placeholders = ','.join('?' * len(group_ids))
+        cursor.execute(
+            f"SELECT id, group_id FROM asset_groups WHERE group_id IN ({placeholders})",
+            group_ids
+        )
+        group_rows = cursor.fetchall()
+        return _build_asset_groups_from_rows(cursor, group_rows)
 
 
 def delete_asset_group_db(asset_group_id: str) -> bool:
@@ -487,14 +645,40 @@ def get_playlist_db(name: str) -> Optional[dict]:
 
 
 def get_all_playlists_db() -> dict:
-    """Get all playlists from the database."""
+    """Get all playlists from the database using batch queries."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT name FROM playlists")
-        names = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SELECT id, name, current_position FROM playlists")
+        playlist_rows = cursor.fetchall()
 
-        return {name: get_playlist_db(name) for name in names}
+        if not playlist_rows:
+            return {}
+
+        playlist_db_ids = [row['id'] for row in playlist_rows]
+        placeholders = ','.join('?' * len(playlist_db_ids))
+
+        # Batch fetch all playlist items
+        cursor.execute(f"""
+            SELECT pi.playlist_id, ag.group_id
+            FROM playlist_items pi
+            JOIN asset_groups ag ON pi.asset_group_id = ag.id
+            WHERE pi.playlist_id IN ({placeholders})
+            ORDER BY pi.position
+        """, playlist_db_ids)
+
+        items_by_playlist = {}
+        for row in cursor.fetchall():
+            items_by_playlist.setdefault(row['playlist_id'], []).append(row['group_id'])
+
+        return {
+            row['name']: {
+                'name': row['name'],
+                'assets': items_by_playlist.get(row['id'], []),
+                'current_position': row['current_position'],
+            }
+            for row in playlist_rows
+        }
 
 
 def delete_playlist_db(name: str) -> bool:
@@ -695,11 +879,11 @@ def cancel_generations(uuids: list) -> int:
         cursor = conn.cursor()
         canceled_count = 0
         for uuid in uuids:
-            # Only cancel pending requests
+            # Cancel pending or stuck processing requests
             cursor.execute("""
                 UPDATE generation_queue
                 SET status = 'canceled', completed_at = ?
-                WHERE uuid = ? AND status = 'pending'
+                WHERE uuid = ? AND status IN ('pending', 'processing')
             """, (datetime.now().isoformat(), uuid))
             canceled_count += cursor.rowcount
         return canceled_count

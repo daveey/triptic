@@ -891,16 +891,12 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             parts = self.path.split('/')
             playlist_name = urllib.parse.unquote(parts[2])
 
-            # Get playlist using new model
-            playlists = get_all_playlists()
-            if playlist_name not in playlists:
-                # Try old-style playlist items for backward compatibility
-                items = get_playlist_items(playlist_name)
-                asset_group_names = [item['name'] for item in items]
+            # Get just this playlist directly (not all playlists)
+            playlist_data = db.get_playlist_db(playlist_name)
+            if playlist_data:
+                asset_group_names = playlist_data.get('assets', [])
             else:
-                # Use new Playlist model - return asset_group IDs
-                playlist = playlists[playlist_name]
-                asset_group_names = playlist.assets
+                asset_group_names = []
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -2461,10 +2457,8 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
             assets_dir = storage.get_assets_dir()
             file_path = assets_dir / filename
 
-            logging.info(f"Asset request: {self.path} -> {file_path} (exists: {file_path.exists()})")
-
             if not file_path.exists():
-                logging.info(f"Asset not found: {file_path}")
+                logging.debug(f"Asset not found: {file_path}")
                 self.send_error(404, "Asset not found")
                 return
 
@@ -2475,7 +2469,6 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
             # Check If-None-Match header for conditional request
             if_none_match = self.headers.get('If-None-Match')
             if if_none_match and if_none_match == etag:
-                logging.info(f"Asset 304: {file_path}")
                 self.send_response(304)
                 self.end_headers()
                 return
@@ -2489,8 +2482,6 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
             # Get file size for Content-Length
             file_size = file_path.stat().st_size
 
-            logging.info(f"Asset 200: {file_path} ({file_size} bytes)")
-
             # Send the file with long cache (UUID-based files are immutable)
             self.send_response(200)
             self.send_header('Content-type', content_type)
@@ -2502,8 +2493,6 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
 
             with open(file_path, 'rb') as f:
                 self.wfile.write(f.read())
-
-            logging.info(f"Asset served: {file_path}")
 
         except Exception as e:
             import traceback
@@ -3714,8 +3703,6 @@ def get_playlist_items(playlist_name: str = None) -> list:
 
     Returns: [{'left': 'url', 'center': 'url', 'right': 'url', 'name': 'asset_group_name'}, ...]
     """
-    from . import storage
-
     if playlist_name is None:
         playlist_name = get_current_playlist()
 
@@ -3728,13 +3715,17 @@ def get_playlist_items(playlist_name: str = None) -> list:
     if not asset_group_names:
         return []
 
-    # Get all asset groups from database
-    all_groups = get_asset_groups()
+    # Only fetch the asset groups we need (not all of them)
+    groups_data = db.get_asset_groups_by_ids_db(asset_group_names)
+    needed_groups = {
+        group_id: AssetGroup.from_dict(data)
+        for group_id, data in groups_data.items()
+    }
 
     result = []
     for asset_group_name in asset_group_names:
-        if asset_group_name in all_groups:
-            asset_group = all_groups[asset_group_name]
+        if asset_group_name in needed_groups:
+            asset_group = needed_groups[asset_group_name]
 
             # Build item with image URLs for each screen
             item = {'name': asset_group_name}
@@ -3758,15 +3749,12 @@ def get_playlist_items(playlist_name: str = None) -> list:
                             if screen_asset.video_url:
                                 item[f"{screen}_video"] = screen_asset.video_url
                         else:
-                            # Fallback - use generating placeholder
                             item[screen] = "/defaults/generating.png"
                             item[f"{screen}_thumb"] = "/defaults/generating.png"
                     else:
-                        # No current version - use generating placeholder
                         item[screen] = "/defaults/generating.png"
                         item[f"{screen}_thumb"] = "/defaults/generating.png"
                 else:
-                    # No versions - use generating placeholder
                     item[screen] = "/defaults/generating.png"
                     item[f"{screen}_thumb"] = "/defaults/generating.png"
 

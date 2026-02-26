@@ -276,13 +276,153 @@ for screen in left center right; do
 done
 ```
 
-### API Endpoints Summary
+## Complete API Reference
 
-| Action | Method | Endpoint |
-|--------|--------|----------|
-| Create playlist | POST | `/playlist/create` |
-| Create asset group | POST | `/asset-group/create` |
-| Add to playlists | POST | `/asset-group/{id}/add-to-playlists` |
-| Regenerate image | POST | `/asset-group/{id}/regenerate/{screen}` |
-| Get queue status | GET | `/generation-queue` |
-| Cancel generation | POST | `/generation-queue/cancel` |
+All endpoints require Basic Auth on production: `-u "daveey:daviddavid"`
+
+URL-encode `/` as `%2F` in asset group IDs (e.g., `theme/name` → `theme%2Fname`)
+
+### Playlist Management
+
+| Action | Method | Endpoint | Body |
+|--------|--------|----------|------|
+| List all playlists | GET | `/playlists` | - |
+| Get current playlist | GET | `/playlist` | - |
+| Get playlist by name | GET | `/playlists/{name}` | - |
+| Get playlist asset groups | GET | `/playlists/{name}/asset-groups` | - |
+| Set current playlist | POST | `/playlist` | `{"name": "playlist-name"}` |
+| Create playlist | POST | `/playlist/create` | `{"name": "playlist-name"}` |
+| Rename playlist | POST | `/playlist/{name}/rename` | `{"new_name": "new-name"}` |
+| Delete playlist | DELETE | `/playlist/{name}` | - |
+| Reorder playlist | POST | `/playlists/{name}/reorder` | `{"order": ["asset1", "asset2"]}` |
+| Remove from playlist | POST | `/playlists/{name}/remove` | `{"asset_group": "asset-id"}` |
+
+### Asset Group Management
+
+| Action | Method | Endpoint | Body |
+|--------|--------|----------|------|
+| List all asset groups | GET | `/asset-groups` | - |
+| Get asset group | GET | `/asset-group/{id}` | - |
+| Create asset group | POST | `/asset-group/create` | `{"id": "theme/name"}` |
+| Create from prompt | POST | `/asset-group/create-from-prompt` | `{"prompt": "...", "playlist": "...", "name": "..."}` |
+| Delete asset group | DELETE | `/asset-group/{id}` | - |
+| Add to playlists | POST | `/asset-group/{id}/add-to-playlists` | `{"playlists": ["p1", "p2"]}` |
+| Rename asset group | POST | `/asset-group/{id}/rename` | `{"newName": "new-name"}` |
+| Duplicate asset group | POST | `/asset-group/{id}/duplicate` | `{"newName": "copy-name"}` |
+
+### Image Generation & Manipulation
+
+| Action | Method | Endpoint | Body |
+|--------|--------|----------|------|
+| Generate image | POST | `/asset-group/{id}/regenerate/{screen}` | `{"prompt": "..."}` |
+| Generate with context | POST | `/asset-group/{id}/regenerate-with-context/{screen}` | `{"contextScreens": ["left", "right"]}` |
+| Edit image | POST | `/asset-group/{id}/edit/{screen}` | `{"prompt": "edit instructions"}` |
+| Upload image | POST | `/asset-group/{id}/upload/{screen}` | Raw image bytes |
+| Upload from URL | POST | `/asset-group/{id}/upload-from-url/{screen}` | `{"url": "...", "prompt": "..."}` |
+| Upload video | POST | `/asset-group/{id}/upload-video/{screen}` | Raw video bytes |
+| Generate video | POST | `/asset-group/{id}/video/{screen}` | - |
+| Flip image | POST | `/asset-group/{id}/flip/{screen}` | - |
+| Swap screens | POST | `/asset-group/{id}/swap` | `{"screen1": "left", "screen2": "right"}` |
+| Copy to screen | POST | `/asset-group/{id}/copy` | `{"sourceScreen": "left", "targetScreen": "right"}` |
+
+**Screen values:** `left`, `center`, `right`
+
+### Version Management
+
+| Action | Method | Endpoint | Body |
+|--------|--------|----------|------|
+| Get versions | GET | `/asset-group/{id}/versions/{screen}` | - |
+| Restore version | POST | `/asset-group/{id}/version/{screen}` | `{"version": 1}` |
+| Delete version | POST | `/asset-group/{id}/delete-version/{screen}` | - |
+
+### Generation Queue
+
+| Action | Method | Endpoint | Body |
+|--------|--------|----------|------|
+| Get queue | GET | `/generation-queue` | - |
+| Cancel generations | POST | `/generation-queue/cancel` | `{"uuids": ["uuid1", "uuid2"]}` |
+
+### Prompt Enhancement (AI-assisted)
+
+| Action | Method | Endpoint | Body |
+|--------|--------|----------|------|
+| Expand prompt | POST | `/prompt/fluff` | `{"prompt": "simple prompt"}` |
+| Generate 3 sub-prompts | POST | `/prompt/fluff-plus` | `{"prompt": "theme"}` |
+| Generate matching prompt | POST | `/prompt/diff-single` | `{"main_prompt": "...", "screen": "center", "other_prompts": {"left": "...", "right": "..."}}` |
+
+### Display Control
+
+| Action | Method | Endpoint | Body |
+|--------|--------|----------|------|
+| Get current asset group | GET | `/state/current-asset-group` | - |
+| Set/lock asset group | POST | `/state/current-asset-group` | `{"asset_group": "id"}` or `{}` to clear |
+
+### System & Config
+
+| Action | Method | Endpoint | Body |
+|--------|--------|----------|------|
+| Get config | GET | `/config` | - |
+| Update config | POST | `/config` | `{...config...}` |
+| Get settings | GET | `/settings` | - |
+| Update settings | POST | `/settings` | `{...settings...}` |
+| Get video models | GET | `/video-models` | - |
+| Video job status | GET | `/video-job/{job_id}` | - |
+| Screen heartbeat | POST | `/heartbeat/{screen_id}` | - |
+| Frame logs | GET | `/frame-logs` | - |
+| Post frame log | POST | `/frame-log` | `{"screen": "...", "level": "...", "message": "..."}` |
+| Generate thumbnails | POST | `/admin/generate-thumbnails` | - |
+
+### Static Content
+
+| Path | Description |
+|------|-------------|
+| `/` | Redirects to `/wall.html` |
+| `/wall.html` | Main display wall |
+| `/playlists.html` | Playlist management UI |
+| `/asset_group.html?id={id}` | Asset group editor |
+| `/content/assets/{uuid}.png` | Serve image by UUID |
+| `/content/assets/{uuid}_thumb.png` | Serve thumbnail |
+| `/content/assets/{uuid}.mp4` | Serve video |
+| `/defaults/generating.png` | Placeholder during generation |
+
+### Quick Reference: Common Tasks
+
+**Display a specific playlist on the wall:**
+```bash
+curl -u "$AUTH" -X POST "$BASE/playlist" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "princess-stained-glass"}'
+```
+
+**Lock display to a single asset group:**
+```bash
+curl -u "$AUTH" -X POST "$BASE/state/current-asset-group" \
+  -H "Content-Type: application/json" \
+  -d '{"asset_group": "princess/aurora"}'
+```
+
+**Unlock display (return to playlist rotation):**
+```bash
+curl -u "$AUTH" -X POST "$BASE/state/current-asset-group" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Generate all 3 screens from a theme (AI generates sub-prompts):**
+```bash
+curl -u "$AUTH" -X POST "$BASE/asset-group/create-from-prompt" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "underwater coral reef", "playlist": "ocean", "name": "coral-reef"}'
+```
+
+**Check generation queue status:**
+```bash
+curl -u "$AUTH" "$BASE/generation-queue"
+```
+
+**Cancel pending generations:**
+```bash
+curl -u "$AUTH" -X POST "$BASE/generation-queue/cancel" \
+  -H "Content-Type: application/json" \
+  -d '{"uuids": ["uuid1", "uuid2"]}'
+```

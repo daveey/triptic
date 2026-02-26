@@ -1701,10 +1701,8 @@
         loadPlaylists();
         updateTime();
         updateQueueStatus();
-        setInterval(function() {
-            updateTime();
-            updateQueueStatus();
-        }, 1000);
+        setInterval(updateTime, 1000);
+        setInterval(updateQueueStatus, 10000);
         updateScreenUrls();
 
         // Start preloading images after a short delay
@@ -1741,7 +1739,7 @@
             } catch (err) {
                 console.warn('Failed to refresh playlists:', err);
             }
-        }, 30000);
+        }, 60000);
 
         // ==================== Mobile View Functions ====================
 

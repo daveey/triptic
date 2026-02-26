@@ -23,6 +23,13 @@
             object-fit: cover;
             object-position: center center;
         }
+        #video-display {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
+            display: none;
+        }
         #loading {
             position: absolute;
             top: 50%;
@@ -47,6 +54,7 @@
 </head>
 <body>
     <img id="display" alt="Display">
+    <video id="video-display" autoplay loop muted playsinline></video>
     <div id="loading">Loading...</div>
     <div id="error"></div>
 
@@ -133,6 +141,7 @@
             }
             var imageUrls = [];
             var thumbUrls = []; // Thumbnail URLs for faster initial loading
+            var videoUrls = []; // Video URLs for screens with video
             var images = [];
             var preloadedImages = {}; // Cache of preloaded Image objects by URL
             var preloadedThumbs = {}; // Cache of preloaded thumbnail objects
@@ -141,10 +150,12 @@
             var currentImageIndex = -1;
             var currentDisplayedUrl = null; // Track what's currently shown
             var currentIsThumb = false; // Track if currently showing thumbnail
+            var currentIsVideo = false; // Track if currently showing video
             var updateInterval = null;
 
             // DOM elements
             var displayEl = document.getElementById('display');
+            var videoEl = document.getElementById('video-display');
             var loadingEl = document.getElementById('loading');
             var errorEl = document.getElementById('error');
 
@@ -156,6 +167,7 @@
             function buildImageUrls(playlistItems) {
                 var newUrls = [];
                 var newThumbs = [];
+                var newVideos = [];
                 if (playlistItems && playlistItems.length > 0) {
                     // Load from playlist - no cache buster, we use preloading
                     for (var i = 0; i < playlistItems.length; i++) {
@@ -168,9 +180,12 @@
                         var url = item[screenId] || item['center'] || '';
                         var thumbKey = screenId + '_thumb';
                         var thumbUrl = item[thumbKey] || item['center_thumb'] || url;
+                        var videoKey = screenId + '_video';
+                        var videoUrl = item[videoKey] || null;
                         if (url) {
                             newUrls.push(url);
                             newThumbs.push(thumbUrl);
+                            newVideos.push(videoUrl); // null if no video
                         }
                     }
                 } else {
@@ -180,9 +195,11 @@
                     for (var j = 1; j <= IMAGE_COUNT; j++) {
                         newUrls.push(basePath + j + '.' + ext);
                         newThumbs.push(basePath + j + '.' + ext);
+                        newVideos.push(null);
                     }
                 }
                 thumbUrls = newThumbs;
+                videoUrls = newVideos;
                 return newUrls;
             }
 
@@ -301,6 +318,7 @@
                 var index = getCurrentImageIndex();
                 var fullUrl = imageUrls[index];
                 var thumbUrl = thumbUrls[index];
+                var videoUrl = videoUrls[index];
 
                 // Log every minute (60 calls at 1 second interval) to show frame is alive
                 if (displayCallCount % 60 === 0) {
@@ -315,13 +333,31 @@
                 // Only update if URL actually changed
                 if (fullUrl !== currentDisplayedUrl || (currentIsThumb && preloadedImages[fullUrl])) {
                     if (index !== lastLoggedIndex) {
-                        if (console && console.log) console.log('[INDEX CHANGE] Switching to index', index, 'url:', fullUrl.substring(0, 60) + '...');
+                        if (console && console.log) console.log('[INDEX CHANGE] Switching to index', index, 'url:', fullUrl.substring(0, 60) + '...', 'video:', videoUrl || 'none');
                         lastLoggedIndex = index;
                     }
                     currentImageIndex = index;
 
                     // Preload next images ahead
                     preloadAhead(index);
+
+                    // Check if video is available for this item
+                    if (videoUrl) {
+                        // Show video instead of image
+                        currentDisplayedUrl = fullUrl;
+                        currentIsThumb = false;
+                        currentIsVideo = true;
+                        setVideo(videoUrl);
+                        return;
+                    }
+
+                    // Hide video and show image
+                    if (currentIsVideo) {
+                        videoEl.style.display = 'none';
+                        videoEl.pause();
+                        displayEl.style.display = 'block';
+                        currentIsVideo = false;
+                    }
 
                     // Check if full image is already preloaded
                     if (preloadedImages[fullUrl]) {
@@ -350,6 +386,17 @@
                         setBackground(fullUrl);
                     }
                 }
+            }
+
+            function setVideo(videoUrl) {
+                // Always use GIF for video content (works on all browsers including old ones)
+                var gifUrl = videoUrl.replace('.mp4', '.gif');
+                if (console && console.log) console.log('[VIDEO] Showing GIF:', gifUrl);
+
+                // Hide video element, show image element with GIF
+                videoEl.style.display = 'none';
+                displayEl.style.display = 'block';
+                displayEl.src = gifUrl;
             }
 
             function setBackground(baseUrl) {
