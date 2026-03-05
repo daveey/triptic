@@ -2,7 +2,7 @@
 
 import base64
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from typing import Optional
 import http.server
 import json
@@ -159,6 +159,7 @@ class Playlist:
     name: str
     assets: list[str] = field(default_factory=list)  # List of asset_group IDs
     current_position: int = 0  # Index into assets array (0-based)
+    child_playlists: list[str] = field(default_factory=list)  # For group playlists
 
     def get_current_asset_id(self) -> Optional[str]:
         """Get the currently displayed asset group ID."""
@@ -187,7 +188,10 @@ class Playlist:
     @classmethod
     def from_dict(cls, data: dict) -> 'Playlist':
         """Create from dictionary."""
-        return cls(**data)
+        # Filter to only known fields
+        known_fields = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in known_fields}
+        return cls(**filtered)
 
 
 def setup_logging() -> None:
@@ -891,10 +895,14 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             parts = self.path.split('/')
             playlist_name = urllib.parse.unquote(parts[2])
 
-            # Get just this playlist directly (not all playlists)
+            # Get playlist, resolving group playlists dynamically
             playlist_data = db.get_playlist_db(playlist_name)
             if playlist_data:
-                asset_group_names = playlist_data.get('assets', [])
+                child_playlists = playlist_data.get('child_playlists', [])
+                if child_playlists:
+                    asset_group_names = resolve_group_playlist_assets(playlist_name)
+                else:
+                    asset_group_names = playlist_data.get('assets', [])
             else:
                 asset_group_names = []
 
@@ -1403,17 +1411,23 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
                 self.send_error(409, f"Playlist already exists: {playlist_name}")
                 return
 
-            # Create empty playlist using new Playlist model
-            playlist = Playlist(name=playlist_name, assets=[], current_position=0)
+            # Support group playlists with child playlists
+            child_playlists = data.get('playlists', [])
+
+            # Create playlist using new Playlist model
+            playlist = Playlist(name=playlist_name, assets=[], current_position=0, child_playlists=child_playlists)
             save_playlist(playlist)
 
-            logging.info(f"[MUTATION] Created playlist: '{playlist_name}'")
+            logging.info(f"[MUTATION] Created playlist: '{playlist_name}'" + (f" (group: {child_playlists})" if child_playlists else ""))
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            response = json.dumps({'status': 'ok', 'name': playlist_name})
+            resp = {'status': 'ok', 'name': playlist_name}
+            if child_playlists:
+                resp['child_playlists'] = child_playlists
+            response = json.dumps(resp)
             self.wfile.write(response.encode())
         except Exception as e:
             import traceback
@@ -3697,6 +3711,35 @@ def reorder_playlist(playlist_name: str, new_order: list) -> bool:
     return True
 
 
+def resolve_group_playlist_assets(playlist_name: str) -> list[str]:
+    """Resolve a group playlist's assets by gathering from child playlists and shuffling deterministically."""
+    playlist_data = db.get_playlist_db(playlist_name)
+    if not playlist_data:
+        return []
+
+    child_playlists = playlist_data.get('child_playlists', [])
+    if not child_playlists:
+        return playlist_data.get('assets', [])
+
+    # Gather all assets from child playlists (deduplicated, preserving order)
+    all_assets = []
+    seen = set()
+    for child_name in child_playlists:
+        child_data = db.get_playlist_db(child_name)
+        if child_data:
+            for asset in child_data.get('assets', []):
+                if asset not in seen:
+                    all_assets.append(asset)
+                    seen.add(asset)
+
+    # Shuffle deterministically so the order is stable but mixed
+    import random
+    rng = random.Random(playlist_name)
+    rng.shuffle(all_assets)
+
+    return all_assets
+
+
 def get_playlist_items(playlist_name: str = None) -> list:
     """
     Get items from a playlist, resolving asset group names to image URLs.
@@ -3711,7 +3754,12 @@ def get_playlist_items(playlist_name: str = None) -> list:
     if not playlist_data:
         return []
 
-    asset_group_names = playlist_data.get('assets', [])
+    # For group playlists, dynamically resolve assets from children
+    child_playlists = playlist_data.get('child_playlists', [])
+    if child_playlists:
+        asset_group_names = resolve_group_playlist_assets(playlist_name)
+    else:
+        asset_group_names = playlist_data.get('assets', [])
     if not asset_group_names:
         return []
 
@@ -3721,6 +3769,12 @@ def get_playlist_items(playlist_name: str = None) -> list:
         group_id: AssetGroup.from_dict(data)
         for group_id, data in groups_data.items()
     }
+
+    # Get content_uuids that are still being generated so we don't
+    # serve UUID-based URLs that the frame would cache with placeholder content.
+    # Once generation completes, the URL changes from /defaults/generating.png
+    # to /content/assets/{uuid}.png, which the frame detects as a new URL.
+    generating_uuids = db.get_generating_content_uuids()
 
     result = []
     for asset_group_name in asset_group_names:
@@ -3739,9 +3793,9 @@ def get_playlist_items(playlist_name: str = None) -> list:
                     if current_version:
                         content_uuid = current_version.content
 
-                        # Build URL
-                        if content_uuid and not content_uuid.startswith('img/'):
-                            # UUID-based path (no version suffix needed)
+                        # Build URL - use placeholder while still generating
+                        if content_uuid and not content_uuid.startswith('img/') and content_uuid not in generating_uuids:
+                            # UUID-based path - generation complete, safe to cache
                             item[screen] = f"/content/assets/{content_uuid}.png"
                             # Add thumbnail URL
                             item[f"{screen}_thumb"] = f"/content/assets/{content_uuid}_thumb.png"
@@ -3813,7 +3867,7 @@ def get_all_playlists() -> dict[str, Playlist]:
 
 def save_playlist(playlist: Playlist) -> None:
     """Save or update a playlist in SQLite database."""
-    db.save_playlist_db(playlist.name, playlist.assets, playlist.current_position)
+    db.save_playlist_db(playlist.name, playlist.assets, playlist.current_position, playlist.child_playlists or None)
     logging.info(f"Saved playlist: {playlist.name}")
 
 

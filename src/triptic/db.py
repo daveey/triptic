@@ -86,7 +86,8 @@ def init_database() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 current_position INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                child_playlists TEXT
             )
         """)
 
@@ -144,6 +145,12 @@ def init_database() -> None:
             CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist
             ON playlist_items (playlist_id, position)
         """)
+
+        # Add child_playlists column if missing (migration for existing DBs)
+        cursor.execute("PRAGMA table_info(playlists)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'child_playlists' not in columns:
+            cursor.execute("ALTER TABLE playlists ADD COLUMN child_playlists TEXT")
 
         logging.info("Database schema initialized")
 
@@ -565,9 +572,11 @@ def delete_asset_group_db(asset_group_id: str) -> bool:
 
 
 # Playlist CRUD Operations
-def save_playlist_db(name: str, assets: list[str], current_position: int) -> int:
+def save_playlist_db(name: str, assets: list[str], current_position: int, child_playlists: list[str] | None = None) -> int:
     """Save a playlist to the database."""
     from datetime import datetime
+
+    child_playlists_json = json.dumps(child_playlists) if child_playlists else None
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -582,13 +591,13 @@ def save_playlist_db(name: str, assets: list[str], current_position: int) -> int
         if playlist_row:
             playlist_db_id = playlist_row[0]
             cursor.execute(
-                "UPDATE playlists SET current_position = ? WHERE id = ?",
-                (current_position, playlist_db_id)
+                "UPDATE playlists SET current_position = ?, child_playlists = ? WHERE id = ?",
+                (current_position, child_playlists_json, playlist_db_id)
             )
         else:
             cursor.execute(
-                "INSERT INTO playlists (name, current_position, created_at) VALUES (?, ?, ?)",
-                (name, current_position, datetime.now().isoformat())
+                "INSERT INTO playlists (name, current_position, created_at, child_playlists) VALUES (?, ?, ?, ?)",
+                (name, current_position, datetime.now().isoformat(), child_playlists_json)
             )
             playlist_db_id = cursor.lastrowid
 
@@ -616,7 +625,7 @@ def get_playlist_db(name: str) -> Optional[dict]:
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id, current_position FROM playlists WHERE name = ?",
+            "SELECT id, current_position, child_playlists FROM playlists WHERE name = ?",
             (name,)
         )
         playlist_row = cursor.fetchone()
@@ -624,7 +633,9 @@ def get_playlist_db(name: str) -> Optional[dict]:
         if not playlist_row:
             return None
 
-        playlist_db_id, current_position = playlist_row
+        playlist_db_id, current_position, child_playlists_json = playlist_row
+
+        child_playlists = json.loads(child_playlists_json) if child_playlists_json else []
 
         # Get playlist items in order
         cursor.execute("""
@@ -640,7 +651,8 @@ def get_playlist_db(name: str) -> Optional[dict]:
         return {
             'name': name,
             'assets': assets,
-            'current_position': current_position
+            'current_position': current_position,
+            'child_playlists': child_playlists,
         }
 
 
@@ -649,7 +661,7 @@ def get_all_playlists_db() -> dict:
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id, name, current_position FROM playlists")
+        cursor.execute("SELECT id, name, current_position, child_playlists FROM playlists")
         playlist_rows = cursor.fetchall()
 
         if not playlist_rows:
@@ -676,6 +688,7 @@ def get_all_playlists_db() -> dict:
                 'name': row['name'],
                 'assets': items_by_playlist.get(row['id'], []),
                 'current_position': row['current_position'],
+                'child_playlists': json.loads(row['child_playlists']) if row['child_playlists'] else [],
             }
             for row in playlist_rows
         }
@@ -801,10 +814,32 @@ def add_to_generation_queue(uuid: str, asset_group_name: str, screen: str, promp
         return cursor.lastrowid
 
 
-def get_pending_generation() -> Optional[dict]:
-    """Get the next pending generation request."""
+def get_generating_content_uuids() -> set[str]:
+    """Get content_uuids that are currently pending or processing generation."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("""
+            SELECT content_uuid FROM generation_queue
+            WHERE status IN ('pending', 'processing')
+        """)
+        return {row[0] for row in cursor.fetchall()}
+
+
+def get_pending_generation() -> Optional[dict]:
+    """Get the next pending generation request. Also recovers stuck 'processing' items older than 5 minutes."""
+    from datetime import datetime, timedelta
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Reset stuck processing items (older than 5 minutes) back to pending
+        cutoff = (datetime.now() - timedelta(minutes=5)).isoformat()
+        cursor.execute("""
+            UPDATE generation_queue
+            SET status = 'pending'
+            WHERE status = 'processing' AND created_at < ?
+        """, (cutoff,))
+
         cursor.execute("""
             SELECT id, uuid, asset_group_name, screen, prompt, content_uuid, created_at
             FROM generation_queue
