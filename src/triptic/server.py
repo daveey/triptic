@@ -545,6 +545,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_swap_images()
         elif self.path.startswith('/asset-group/') and '/copy' in self.path:
             self._handle_copy_image()
+        elif self.path == '/overheard':
+            self._handle_overheard()
         elif self.path == '/prompt/fluff':
             self._handle_fluff_prompt()
         elif self.path == '/prompt/fluff-plus':
@@ -3260,6 +3262,159 @@ Generate a single, well-crafted prompt (2-4 sentences) that will produce stunnin
             import traceback
             traceback.print_exc()
             self.send_error(500, f"Error processing request: {e}")
+
+    def _handle_overheard(self) -> None:
+        """Create a stained-glass robot triptych from a casual phrase and add to 'overheard' playlist."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode())
+
+            phrase = data.get('phrase', '').strip()
+            assert phrase, "Missing 'phrase' field"
+
+            # Slugify the phrase for the asset group ID
+            import re
+            slug = re.sub(r'[^a-z0-9]+', '-', phrase.lower())[:50].strip('-')
+            group_id = f"overheard/{slug}"
+
+            # Ensure unique ID
+            base_id = group_id
+            counter = 1
+            while get_asset_group(group_id):
+                group_id = f"{base_id}-{counter}"
+                counter += 1
+
+            from google import genai
+            from triptic.imgen import get_api_key
+
+            api_key = get_api_key()
+            assert api_key, "No Gemini API key configured"
+
+            client = genai.Client(api_key=api_key)
+
+            STAINED_GLASS_ROBOT_STYLE = (
+                "A full-frame stained glass window filling the entire image. "
+                "Thick black lead lines separating colored glass pieces. "
+                "Glowing backlit translucent glass in rich jewel tones. "
+                "Gothic arched window shape."
+            )
+
+            generation_prompt = f"""You are a prompt engineer for Google's Imagen image generation AI.
+
+Someone said: "{phrase}"
+
+Generate exactly 3 image prompts that illustrate this phrase as a stained-glass robot triptych (three-panel artwork).
+Each panel should depict a robot character acting out or interpreting a different aspect of what was said.
+The robots should be charming, expressive, and rendered in a stained glass art style.
+
+Every prompt MUST begin with this exact style prefix:
+"{STAINED_GLASS_ROBOT_STYLE}"
+
+Then after the style prefix, describe:
+- A robot character doing something related to the phrase
+- Rich jewel-tone colors appropriate to the scene
+- Details rendered as stained glass elements (lead lines, translucent glass pieces)
+
+Example - if the phrase is "today I went to the farmers market":
+1. "{STAINED_GLASS_ROBOT_STYLE} A cheerful robot browsing colorful fruit stalls at a farmers market, rendered in stained glass, baskets of ruby red apples and emerald green pears as faceted glass pieces, morning sunlight streaming through, warm amber and fresh green glass."
+2. "{STAINED_GLASS_ROBOT_STYLE} A robot carefully selecting flowers from a market vendor, rendered in stained glass, bouquets of roses and sunflowers as intricate glass petals in crimson and gold, the vendor robot smiling behind the stand, soft pink and golden yellow glass."
+3. "{STAINED_GLASS_ROBOT_STYLE} A robot carrying paper bags of fresh produce walking home from the market, rendered in stained glass, leafy greens and round tomatoes visible in the bags as colored glass shapes, a sunset sky behind, warm orange and deep green glass."
+
+Guidelines:
+1. Each prompt must start with the exact style prefix above
+2. Each should show a different moment or aspect of the phrase
+3. Include specific stained glass details (lead lines, glass colors, translucent effects)
+4. Include specific jewel-tone color palette descriptions at the end
+5. Make the robots expressive and engaging
+
+Return ONLY the 3 numbered prompts, nothing else. Format as:
+1. [full prompt for left panel]
+2. [full prompt for center panel]
+3. [full prompt for right panel]"""
+
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=generation_prompt
+            )
+
+            response_text = response.text.strip()
+            lines = [line.strip() for line in response_text.split('\n') if line.strip()]
+
+            sub_prompts = {}
+            panel_names = ['left', 'center', 'right']
+
+            for i, panel in enumerate(panel_names):
+                prefix = f"{i+1}."
+                for line in lines:
+                    if line.startswith(prefix):
+                        sub_prompts[panel] = line[len(prefix):].strip()
+                        break
+                if panel not in sub_prompts and i < len(lines):
+                    sub_prompts[panel] = lines[i].lstrip('123.-) ').strip()
+
+            assert len(sub_prompts) == 3, f"Failed to generate 3 sub-prompts (got {len(sub_prompts)})"
+
+            # Ensure the style prefix is in each prompt
+            for panel in panel_names:
+                if STAINED_GLASS_ROBOT_STYLE not in sub_prompts[panel]:
+                    sub_prompts[panel] = f"{STAINED_GLASS_ROBOT_STYLE} {sub_prompts[panel]}"
+
+            # Create asset group
+            asset_group = AssetGroup(id=group_id)
+            save_asset_group(asset_group)
+
+            # Ensure 'overheard' playlist exists and add to it
+            playlists = list_playlists()
+            if 'overheard' not in [p.name for p in playlists]:
+                create_playlist('overheard')
+            add_to_playlist('overheard', group_id)
+
+            # Queue generation for all 3 screens
+            queued = []
+            for screen in ['left', 'center', 'right']:
+                screen_prompt = sub_prompts[screen]
+                request_uuid = storage.generate_uuid()
+                content_uuid = storage.generate_uuid()
+
+                generating_placeholder = storage.get_assets_dir() / f"{storage.GENERATING_PLACEHOLDER_UUID}.png"
+                output_path = storage.get_assets_dir() / f"{content_uuid}.png"
+                if generating_placeholder.exists():
+                    shutil.copy2(generating_placeholder, output_path)
+                    storage.create_thumbnail(content_uuid, output_path)
+
+                version = AssetVersion(
+                    content=content_uuid,
+                    prompt=screen_prompt,
+                    timestamp=datetime.now().isoformat()
+                )
+                screen_asset = getattr(asset_group, screen)
+                screen_asset.add_version(version, set_as_current=True)
+
+                db.add_to_generation_queue(request_uuid, group_id, screen, screen_prompt, content_uuid)
+                queued.append({'screen': screen, 'prompt': screen_prompt, 'request_uuid': request_uuid})
+
+            save_asset_group(asset_group)
+
+            logging.info(f"[Overheard] Created '{group_id}' from phrase: {phrase}")
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            response_data = json.dumps({
+                'status': 'ok',
+                'asset_group_id': group_id,
+                'phrase': phrase,
+                'prompts': sub_prompts,
+                'queued': queued
+            })
+            self.wfile.write(response_data.encode())
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._send_json_error(500, f"Error creating overheard triptych: {e}")
 
     def _handle_fluff_plus_prompt(self) -> None:
         """Use Gemini to generate 3 sub-prompts from a category prompt."""
