@@ -776,6 +776,14 @@ def update_screen_heartbeat_db(screen_id: str, timestamp: str) -> None:
         )
 
 
+def get_all_screen_heartbeats() -> dict:
+    """Return {screen_id: last_sync_iso} for every screen that has ever heartbeat."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT screen_id, last_sync FROM screen_heartbeats")
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+
 # Generation Queue Operations
 def init_generation_queue_table() -> None:
     """Initialize the generation queue table."""

@@ -459,6 +459,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_get_generation_queue()
         elif self.path == '/frame-logs':
             self._handle_get_frame_logs()
+        elif self.path == '/heartbeats':
+            self._handle_get_heartbeats()
         elif self.path.startswith('/content/assets/'):
             self._handle_get_asset_file()
         elif self.path == '/' or self.path == '':
@@ -1551,6 +1553,30 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
             self.wfile.write(response.encode())
         except Exception as e:
             self.send_error(500, f"Error recording heartbeat: {e}")
+
+    def _handle_get_heartbeats(self) -> None:
+        """Return last-sync timestamp for every screen plus seconds-since-now."""
+        try:
+            heartbeats = db.get_all_screen_heartbeats()
+            now = datetime.now()
+            screens = {}
+            for screen_id, last_sync in heartbeats.items():
+                seconds_ago = None
+                try:
+                    seconds_ago = int((now - datetime.fromisoformat(last_sync)).total_seconds())
+                except (ValueError, TypeError):
+                    pass
+                screens[screen_id] = {
+                    'last_sync': last_sync,
+                    'seconds_ago': seconds_ago,
+                }
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'screens': screens}).encode())
+        except Exception as e:
+            self.send_error(500, f"Error reading heartbeats: {e}")
 
     def _handle_frame_log(self) -> None:
         """Receive and store log messages from frames."""
