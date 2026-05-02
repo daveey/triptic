@@ -461,11 +461,6 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_get_frame_logs()
         elif self.path == '/heartbeats':
             self._handle_get_heartbeats()
-        elif self.path.startswith('/defaults/assets/'):
-            # CF Access bypass alias: triptic.dbloom.in has CF Access configured
-            # to bypass /defaults/* but not /content/assets/*. Screen frames
-            # load images via this alias so they work through the CF-proxied domain.
-            self._handle_get_asset_file()
         elif self.path.startswith('/content/assets/'):
             self._handle_get_asset_file()
         elif self.path == '/' or self.path == '':
@@ -828,8 +823,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
                             if current_version:
                                 content_uuid = current_version.content
                                 if content_uuid and not content_uuid.startswith('img/'):
-                                    item[screen] = f"/defaults/assets/{content_uuid}.png"
-                                    item[f"{screen}_thumb"] = f"/defaults/assets/{content_uuid}_thumb.png"
+                                    item[screen] = f"/content/assets/{content_uuid}.png"
+                                    item[f"{screen}_thumb"] = f"/content/assets/{content_uuid}_thumb.png"
                                     # Add video URL if available
                                     if screen_asset.video_url:
                                         item[f"{screen}_video"] = screen_asset.video_url
@@ -3826,12 +3821,10 @@ def get_playlist_items(playlist_name: str = None) -> list:
 
                         # Build URL - use placeholder while still generating
                         if content_uuid and not content_uuid.startswith('img/') and content_uuid not in generating_uuids:
-                            # UUID-based path - generation complete, safe to cache.
-                            # Use /defaults/assets/ prefix: CF Access on triptic.dbloom.in
-                            # bypasses /defaults/* but not /content/assets/*.
-                            item[screen] = f"/defaults/assets/{content_uuid}.png"
+                            # UUID-based path - generation complete, safe to cache
+                            item[screen] = f"/content/assets/{content_uuid}.png"
                             # Add thumbnail URL
-                            item[f"{screen}_thumb"] = f"/defaults/assets/{content_uuid}_thumb.png"
+                            item[f"{screen}_thumb"] = f"/content/assets/{content_uuid}_thumb.png"
                             # Add video URL if available
                             if screen_asset.video_url:
                                 item[f"{screen}_video"] = screen_asset.video_url
