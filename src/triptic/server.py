@@ -27,16 +27,30 @@ video_jobs = {}
 # Data Models
 @dataclass
 class AssetVersion:
-    """Represents a single version of an asset (image or video) with its generation metadata."""
+    """Represents a single version of an asset (image or video) with its generation metadata.
+
+    Invariant: `content` is the UUID of the file on disk (`<content>.png` /
+    `_thumb.png` / `.mp4`). `version_uuid` is the identity of this row in the
+    asset's version list. They start out equal — see `__post_init__` — and
+    must STAY equal. Multiple historical bugs (4848bae, 052eb3b) came from
+    code grabbing `version_uuid` and treating it as the content uuid; the
+    paired warning in `__post_init__` makes any future drift loud.
+    """
     content: str  # UUID of the file in the assets directory
     prompt: str   # The prompt used to generate this version
     version_uuid: Optional[str] = None  # Unique identifier for this version
     timestamp: Optional[str] = None  # ISO format timestamp of creation
 
     def __post_init__(self):
-        """Generate version UUID if not provided."""
+        """Default version_uuid to content. Warn loudly if they ever diverge."""
         if self.version_uuid is None:
-            self.version_uuid = str(uuid.uuid4())
+            self.version_uuid = self.content
+        elif self.version_uuid != self.content:
+            logging.warning(
+                "AssetVersion: version_uuid != content "
+                f"(version_uuid={self.version_uuid}, content={self.content}). "
+                "These must match — code that resolves files by version_uuid will 404."
+            )
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -294,6 +308,10 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
         if parsed_path in ['/config', '/playlist']:
             return False
 
+        # Allow Fly.io / external health checks (no creds available there)
+        if parsed_path == '/healthz':
+            return False
+
         # Allow frame logging endpoint (for debugging)
         if parsed_path == '/frame-log':
             return False
@@ -461,6 +479,8 @@ class TripticHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_get_frame_logs()
         elif self.path == '/heartbeats':
             self._handle_get_heartbeats()
+        elif self.path == '/healthz':
+            self._handle_healthz()
         elif self.path.startswith('/content/assets/'):
             self._handle_get_asset_file()
         elif self.path == '/' or self.path == '':
@@ -1553,6 +1573,44 @@ Return ONLY the 3 numbered prompts, nothing else. Format as:
             self.wfile.write(response.encode())
         except Exception as e:
             self.send_error(500, f"Error recording heartbeat: {e}")
+
+    def _handle_healthz(self) -> None:
+        """Liveness + readiness check.
+
+        Reads a known default asset off the volume so the check fails when the
+        Fly volume isn't actually mounted/populated — the failure mode that
+        let an empty-volume deploy serve clean 404s for every playlist image
+        while still passing a basic /index.html ping.
+        """
+        check_path = storage.get_assets_dir() / f"{storage.DEFAULT_LEFT_UUID}.png"
+        try:
+            ok = check_path.exists() and check_path.stat().st_size > 0
+        except OSError as e:
+            self.send_response(503)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'status': 'unhealthy',
+                'reason': f'asset read failed: {e}',
+                'check_path': str(check_path),
+            }).encode())
+            return
+
+        if not ok:
+            self.send_response(503)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'status': 'unhealthy',
+                'reason': 'default asset missing on volume',
+                'check_path': str(check_path),
+            }).encode())
+            return
+
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'status': 'ok'}).encode())
 
     def _handle_get_heartbeats(self) -> None:
         """Return last-sync timestamp for every screen plus seconds-since-now."""

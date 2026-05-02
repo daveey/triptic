@@ -50,34 +50,51 @@ def get_public_dir() -> Path:
         return Path(__file__).parent.parent.parent / 'public'
 
 
+DEFAULT_ASSET_FILENAMES = {
+    'default_left.png': DEFAULT_LEFT_UUID,
+    'default_center.png': DEFAULT_CENTER_UUID,
+    'default_right.png': DEFAULT_RIGHT_UUID,
+    'generating.png': GENERATING_PLACEHOLDER_UUID,
+    'canceled.png': CANCELED_PLACEHOLDER_UUID,
+}
+
+
 def initialize_default_assets() -> None:
     """
     Copy default placeholder images to assets directory with known UUIDs.
-    This should be called once at startup to ensure defaults are always available.
+    Called at startup. Raises RuntimeError if any default fails to land on
+    disk — better to fail boot than to serve 404s for known-good UUIDs.
     """
     public_dir = get_public_dir()
     defaults_dir = public_dir / 'defaults'
     assets_dir = get_assets_dir()
 
-    # Mapping of default files to their UUIDs
-    defaults = {
-        'default_left.png': DEFAULT_LEFT_UUID,
-        'default_center.png': DEFAULT_CENTER_UUID,
-        'default_right.png': DEFAULT_RIGHT_UUID,
-        'generating.png': GENERATING_PLACEHOLDER_UUID,
-        'canceled.png': CANCELED_PLACEHOLDER_UUID,
-    }
+    missing_sources = []
+    write_failures = []
 
-    for filename, content_uuid in defaults.items():
+    for filename, content_uuid in DEFAULT_ASSET_FILENAMES.items():
         source = defaults_dir / filename
         dest = assets_dir / f"{content_uuid}.png"
 
-        # Only copy if source exists and dest doesn't exist
-        if source.exists() and not dest.exists():
+        if not source.exists():
+            missing_sources.append(str(source))
+            continue
+
+        if not dest.exists():
             shutil.copy2(source, dest)
             logging.info(f"Initialized default asset: {dest}")
-        elif not source.exists():
-            logging.warning(f"Default asset source not found: {source}")
+
+        # Verify the file actually landed (defensive: catches mount/permission
+        # weirdness where copy2 succeeds but the file isn't readable later).
+        if not dest.exists() or dest.stat().st_size == 0:
+            write_failures.append(str(dest))
+
+    if missing_sources or write_failures:
+        raise RuntimeError(
+            "Default asset initialization failed. "
+            f"missing_sources={missing_sources} write_failures={write_failures}. "
+            f"assets_dir={assets_dir}"
+        )
 
 
 def generate_uuid() -> str:
@@ -108,6 +125,17 @@ def store_file(source_path: Path, content_uuid: Optional[str] = None) -> str:
 
     # Copy file
     shutil.copy2(source_path, dest_path)
+
+    # Post-write verification: catches the failure mode where copy2 succeeds
+    # but the volume isn't actually persisted (Fly per-machine volume swaps,
+    # full disk silently dropping writes, etc.) so we surface it now instead
+    # of letting a screen 404 weeks later.
+    if not dest_path.exists() or dest_path.stat().st_size == 0:
+        raise IOError(
+            f"store_file: write to {dest_path} did not persist "
+            f"(exists={dest_path.exists()}, size={dest_path.stat().st_size if dest_path.exists() else 'n/a'})"
+        )
+
     logging.info(f"Stored file {source_path} as {dest_path}")
 
     return content_uuid

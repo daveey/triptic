@@ -85,6 +85,8 @@ class EndpointIntegrationTest(unittest.TestCase):
 
         # Set environment variable for content directory
         os.environ['TRIPTIC_CONTENT_DIR'] = cls.temp_content_dir
+        # storage.get_assets_dir() reads TRIPTIC_ASSETS_DIR independently
+        os.environ['TRIPTIC_ASSETS_DIR'] = str(cls.temp_assets_dir)
 
         # Initialize database with test data
         cls._init_test_database()
@@ -242,6 +244,26 @@ class EndpointIntegrationTest(unittest.TestCase):
         self._mark_tested('GET', '/')
         response = requests.get(f"{self.base_url}/")
         self.assertEqual(response.status_code, 200)
+
+    def test_get_healthz(self):
+        """Test GET /healthz — fails when default asset is missing on volume."""
+        self._mark_tested('GET', '/healthz')
+        # Default asset must exist for healthy response. Create it on the
+        # test assets dir so the read succeeds.
+        from triptic import storage
+        default_path = self.temp_assets_dir / f"{storage.DEFAULT_LEFT_UUID}.png"
+        default_path.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+        response = requests.get(f"{self.base_url}/healthz")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'ok')
+
+        # Remove the file and confirm the check now fails — this is the bug
+        # the endpoint exists to catch.
+        default_path.unlink()
+        response = requests.get(f"{self.base_url}/healthz")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()['status'], 'unhealthy')
 
     def test_get_config(self):
         """Test GET /config"""
